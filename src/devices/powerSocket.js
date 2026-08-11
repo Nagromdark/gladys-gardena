@@ -18,7 +18,15 @@ import {
   POWER_SOCKET_ACTIVE_ACTIVITIES,
   SERVICE_TYPES,
 } from '../gardena/constants.js';
-import { binaryState, featureId, minutesToSeconds, numberState, textState } from './helpers.js';
+import {
+  BINARY_BOUNDS,
+  TEXT_BOUNDS,
+  binaryState,
+  featureId,
+  minutesToSeconds,
+  numberState,
+  textState,
+} from './helpers.js';
 
 const FEATURE = {
   ON_OFF: 'on-off',
@@ -48,6 +56,7 @@ export const powerSocket = {
         external_id: featureId(ids, service, FEATURE.ON_OFF),
         category: DEVICE_FEATURE_CATEGORIES.SWITCH,
         type: DEVICE_FEATURE_TYPES.SWITCH.BINARY,
+        ...BINARY_BOUNDS,
         read_only: false,
         has_feedback: true,
         keep_history: true,
@@ -57,6 +66,7 @@ export const powerSocket = {
         external_id: featureId(ids, service, FEATURE.ACTIVITY),
         category: DEVICE_FEATURE_CATEGORIES.TEXT,
         type: DEVICE_FEATURE_TYPES.TEXT.TEXT,
+        ...TEXT_BOUNDS,
         read_only: true,
         has_feedback: false,
         keep_history: false,

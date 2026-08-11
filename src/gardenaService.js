@@ -134,11 +134,9 @@ export class GardenaService {
   async applyConfig(config, reconnect) {
     this.config = config;
     if (!reconnect) {
-      // Durations and modes only change what the NEXT command will send, but
-      // poll_frequency is part of the published devices.
-      if (this.devices.size > 0) {
-        await this.publishDiscoveredDevices();
-      }
+      // Durations and modes are read at command time, and the refresh interval
+      // at the next poll: nothing published to Gladys depends on them, so there
+      // is nothing to re-publish here.
       return;
     }
     logger.info('Credentials or location changed: restarting the GARDENA session');
@@ -284,9 +282,7 @@ export class GardenaService {
 
   /** Publish the complete list of GARDENA devices to the discovery screen. */
   async publishDiscoveredDevices() {
-    const devices = [...this.devices.values()].map((device) =>
-      buildDevice(this.gladys, device, this.config),
-    );
+    const devices = [...this.devices.values()].map((device) => buildDevice(this.gladys, device));
     await this.gladys.publishDiscoveredDevices(devices);
   }
 

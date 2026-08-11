@@ -26,6 +26,18 @@ import { valve } from './valve.js';
 // string would orphan every device already created by the users.
 export const DEVICE_TYPE = 'gardena';
 
+// Gladys' `poll_frequency` is NOT a free number of seconds: it is an enum of
+// six values in MILLISECONDS (1 s, 2 s, 10 s, 15 s, 30 s, 60 s — see
+// DEVICE_POLL_FREQUENCIES in the Gladys core), and anything else is rejected
+// with "invalid poll frequency". One minute is the slowest it offers, so it is
+// the only sensible choice for a rate-limited cloud API.
+//
+// That is NOT the rate at which GARDENA is called: `onPoll` answers from the
+// shared in-memory picture, and only re-reads the GARDENA API when it is older
+// than the user's `poll_frequency` configuration (in seconds). Gladys ticks
+// every minute, GARDENA is read every 15 minutes by default.
+export const GLADYS_POLL_FREQUENCY_MS = 60 * 1000;
+
 export const SERVICE_MODULES = [mower, valve, powerSocket, sensor];
 
 /**
@@ -42,10 +54,9 @@ export function idsOf(gladys, device) {
  * Build the Gladys device published to the discovery screen.
  * @param {object} gladys - The SDK instance.
  * @param {object} device - Normalized GARDENA device.
- * @param {object} config - Integration configuration.
  * @returns {object} A Gladys device.
  */
-export function buildDevice(gladys, device, config) {
+export function buildDevice(gladys, device) {
   const ids = idsOf(gladys, device);
   const features = [...buildCommonFeatures(ids, device)];
   for (const module of SERVICE_MODULES) {
@@ -57,8 +68,9 @@ export function buildDevice(gladys, device, config) {
     name: device.name,
     external_id: ids.device,
     // The websocket carries the real-time changes; polling is the safety net
-    // for a missed message or a websocket the network keeps cutting.
-    poll_frequency: config.poll_frequency,
+    // for a missed message or a websocket the network keeps cutting. The
+    // GARDENA API is not hit at this rate — see GLADYS_POLL_FREQUENCY_MS.
+    poll_frequency: GLADYS_POLL_FREQUENCY_MS,
     features,
     params: buildParams(device),
   };

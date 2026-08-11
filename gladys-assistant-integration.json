@@ -68,10 +68,10 @@
     {
       "key": "poll_frequency",
       "type": "number",
-      "label": { "en": "Refresh interval (s)", "fr": "Intervalle de rafraîchissement (s)" },
+      "label": { "en": "GARDENA API refresh (s)", "fr": "Relecture de l'API GARDENA (s)" },
       "description": {
-        "en": "Safety net behind the real-time stream. The GARDENA API is rate-limited: keep it high, changes already arrive in real time.",
-        "fr": "Filet de sécurité derrière le flux temps réel. L'API GARDENA est limitée en débit : gardez une valeur élevée, les changements arrivent déjà en temps réel."
+        "en": "Minimum delay between two full reads of the GARDENA API, the safety net behind the real-time stream. The API is rate-limited: keep it high, changes already arrive in real time.",
+        "fr": "Délai minimum entre deux relectures complètes de l'API GARDENA, le filet de sécurité derrière le flux temps réel. L'API est limitée en débit : gardez une valeur élevée, les changements arrivent déjà en temps réel."
       },
       "required": false,
       "default": 900,

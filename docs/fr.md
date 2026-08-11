@@ -46,14 +46,14 @@ parle qu'au cloud GARDENA. Une connexion Internet est donc nécessaire.
 
 Réglages optionnels :
 
-| Réglage                            | Rôle                                                                                                                                                    |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Identifiant d'emplacement**      | Limiter l'intégration à un seul jardin. Laissez vide pour tous les utiliser.                                                                            |
-| **Intervalle de rafraîchissement** | Filet de sécurité derrière le flux temps réel. GARDENA limite le débit de son API : gardez une valeur élevée, les changements arrivent déjà en 1 à 2 s. |
-| **Durée par défaut**               | Durée d'arrosage d'une vanne, ou d'allumage d'une prise, quand vous l'activez depuis Gladys.                                                            |
-| **Allumage des prises**            | Éteindre automatiquement après la durée par défaut, ou rester allumée jusqu'à extinction.                                                               |
-| **Démarrage de la tondeuse**       | Démarrer la tondeuse peut suivre son propre calendrier, ou le forcer pendant une durée fixe.                                                            |
-| **Arrêt de la tondeuse**           | Arrêter la tondeuse peut la garer jusqu'à sa prochaine tâche planifiée, ou annuler le calendrier jusqu'à nouvel ordre.                                  |
+| Réglage                        | Rôle                                                                                                                                                                                                                       |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Identifiant d'emplacement**  | Limiter l'intégration à un seul jardin. Laissez vide pour tous les utiliser.                                                                                                                                               |
+| **Relecture de l'API GARDENA** | Délai minimum entre deux relectures complètes de l'API GARDENA, le filet de sécurité derrière le flux temps réel. GARDENA limite le débit de son API : gardez une valeur élevée, les changements arrivent déjà en 1 à 2 s. |
+| **Durée par défaut**           | Durée d'arrosage d'une vanne, ou d'allumage d'une prise, quand vous l'activez depuis Gladys.                                                                                                                               |
+| **Allumage des prises**        | Éteindre automatiquement après la durée par défaut, ou rester allumée jusqu'à extinction.                                                                                                                                  |
+| **Démarrage de la tondeuse**   | Démarrer la tondeuse peut suivre son propre calendrier, ou le forcer pendant une durée fixe.                                                                                                                               |
+| **Arrêt de la tondeuse**       | Arrêter la tondeuse peut la garer jusqu'à sa prochaine tâche planifiée, ou annuler le calendrier jusqu'à nouvel ordre.                                                                                                     |
 
 ## Ce que vous obtenez dans Gladys
 
@@ -84,6 +84,12 @@ de sécurité en cas de message manqué.
 
 GARDENA ferme ce websocket toutes les deux heures environ, volontairement :
 l'intégration se reconnecte seule et se resynchronise à chaque fois.
+
+Gladys interroge ses appareils toutes les minutes (son intervalle le plus court
+disponible), mais cette interrogation **n'appelle pas** GARDENA : l'intégration
+répond depuis l'image qu'elle a déjà en mémoire, et ne relit l'API GARDENA que
+lorsque cette image dépasse l'âge du réglage **Relecture de l'API GARDENA**.
+Quel que soit le nombre d'appareils du jardin, une relecture coûte un appel.
 
 ## Actions
 

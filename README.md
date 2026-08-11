@@ -34,7 +34,10 @@ GARDENA smart API   ──── GET /v2/locations/{id} ───────▶
   two hours: the integration reconnects with a fresh URL and resynchronizes.
 - **REST sparingly.** The GARDENA API is heavily rate-limited, so the client
   serializes and spaces out its calls, and the periodic poll is only a safety
-  net whose refreshes are shared between all devices.
+  net whose refreshes are shared between all devices. Gladys' own
+  `poll_frequency` is an enum in milliseconds capped at one minute, so the tick
+  is frequent by construction: `onPoll` answers from the in-memory picture and
+  only re-reads GARDENA past the configured refresh interval.
 - **States are deduplicated.** Only values that actually changed are published,
   and only for the devices the user created in Gladys.
 - **The state is what GARDENA says**, never what Gladys asked for: a mower that

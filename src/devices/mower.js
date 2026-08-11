@@ -24,7 +24,15 @@ import {
   MOWER_ACTIVE_ACTIVITIES,
   SERVICE_TYPES,
 } from '../gardena/constants.js';
-import { binaryState, featureId, minutesToSeconds, numberState, textState } from './helpers.js';
+import {
+  BINARY_BOUNDS,
+  TEXT_BOUNDS,
+  binaryState,
+  featureId,
+  minutesToSeconds,
+  numberState,
+  textState,
+} from './helpers.js';
 
 const FEATURE = {
   ON_OFF: 'on-off',
@@ -56,6 +64,7 @@ export const mower = {
         external_id: featureId(ids, service, FEATURE.ON_OFF),
         category: DEVICE_FEATURE_CATEGORIES.SWITCH,
         type: DEVICE_FEATURE_TYPES.SWITCH.BINARY,
+        ...BINARY_BOUNDS,
         read_only: false,
         // The confirmation comes from GARDENA (websocket), not from the command.
         has_feedback: true,
@@ -66,6 +75,7 @@ export const mower = {
         external_id: featureId(ids, service, FEATURE.ACTIVITY),
         category: DEVICE_FEATURE_CATEGORIES.TEXT,
         type: DEVICE_FEATURE_TYPES.TEXT.TEXT,
+        ...TEXT_BOUNDS,
         read_only: true,
         has_feedback: false,
         keep_history: false,
@@ -75,6 +85,7 @@ export const mower = {
         external_id: featureId(ids, service, FEATURE.STATE),
         category: DEVICE_FEATURE_CATEGORIES.TEXT,
         type: DEVICE_FEATURE_TYPES.TEXT.TEXT,
+        ...TEXT_BOUNDS,
         read_only: true,
         has_feedback: false,
         keep_history: false,
@@ -84,6 +95,7 @@ export const mower = {
         external_id: featureId(ids, service, FEATURE.ERROR),
         category: DEVICE_FEATURE_CATEGORIES.TEXT,
         type: DEVICE_FEATURE_TYPES.TEXT.TEXT,
+        ...TEXT_BOUNDS,
         read_only: true,
         has_feedback: false,
         keep_history: false,

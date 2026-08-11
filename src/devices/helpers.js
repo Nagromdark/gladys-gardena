@@ -8,6 +8,13 @@
 
 import { serviceSuffixOf } from '../gardena/model.js';
 
+// Gladys stores `min` and `max` as NOT NULL on EVERY device feature, including
+// the ones where the notion means nothing: a feature published without them is
+// rejected when the user creates the device ("min cannot be null"). These are
+// the two conventional pairs.
+export const BINARY_BOUNDS = { min: 0, max: 1 };
+export const TEXT_BOUNDS = { min: 0, max: 0 };
+
 /**
  * External id of a feature carried by a service.
  *

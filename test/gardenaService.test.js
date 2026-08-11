@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import { GardenaService } from '../src/gardenaService.js';
 import { buildDevice } from '../src/devices/index.js';
 import { parseLocation } from '../src/gardena/model.js';
-import { DEFAULT_CONFIG, normalizeConfig } from '../src/config.js';
+import { normalizeConfig } from '../src/config.js';
 import { asCreatedDevice, createFakeGladys } from './helpers/fakeGladys.js';
 import {
   IRRIGATION_CONTROL_ID,
@@ -73,9 +73,7 @@ function createFakeRealtime(streams) {
 function createService({ createdDevices = 'all' } = {}) {
   const parsed = parseLocation(buildLocationPayload(), 'My Garden');
   const reference = createFakeGladys();
-  const discovered = [...parsed.values()].map((device) =>
-    buildDevice(reference, device, DEFAULT_CONFIG),
-  );
+  const discovered = [...parsed.values()].map((device) => buildDevice(reference, device));
   const devices =
     createdDevices === 'all'
       ? discovered.map(asCreatedDevice)
@@ -127,7 +125,7 @@ test('an unconfigured integration reports why instead of hammering the API', asy
 test('states are published only for the devices the user created', async () => {
   const parsed = parseLocation(buildLocationPayload());
   const reference = createFakeGladys();
-  const onlyMower = buildDevice(reference, parsed.get(MOWER_ID), DEFAULT_CONFIG);
+  const onlyMower = buildDevice(reference, parsed.get(MOWER_ID));
   const { service, gladys } = createService({ createdDevices: [onlyMower] });
 
   await service.start(CONFIG);
@@ -282,7 +280,8 @@ test('changing the credentials restarts the session, changing a duration does no
 
   await service.applyConfig({ ...CONFIG, default_duration: 45 }, false);
   assert.equal(streams.length, 1, 'no new stream');
-  assert.equal(gladys.discovered.length, 2, 'devices re-published (poll_frequency may have moved)');
+  assert.equal(gladys.discovered.length, 1, 'nothing published depends on a duration');
+  assert.equal(service.config.default_duration, 45, 'the next command will use the new duration');
 
   await service.applyConfig({ ...CONFIG, application_key: 'other-key' }, true);
   assert.equal(streams[0].stopped, true, 'the old stream is closed');

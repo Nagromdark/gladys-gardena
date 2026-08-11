@@ -8,7 +8,11 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEVICE_FEATURE_CATEGORIES, DEVICE_FEATURE_TYPES } from '@gladysassistant/integration-sdk';
+import {
+  DEVICE_FEATURE_CATEGORIES,
+  DEVICE_FEATURE_TYPES,
+  DEVICE_FEATURE_UNITS,
+} from '@gladysassistant/integration-sdk';
 import { buildCommands, buildDevice, buildStates, valveSetIds } from '../src/devices/index.js';
 import { isMowing } from '../src/devices/mower.js';
 import { isWatering } from '../src/devices/valve.js';
@@ -31,7 +35,7 @@ const devices = parseLocation(buildLocationPayload(), 'My Garden');
 const config = { ...DEFAULT_CONFIG };
 
 function featureOf(device, suffix) {
-  return buildDevice(gladys, device, config).features.find((feature) =>
+  return buildDevice(gladys, device).features.find((feature) =>
     feature.external_id.endsWith(suffix),
   );
 }
@@ -43,11 +47,10 @@ function stateOf(device, suffix) {
 }
 
 test('a device is published with the GARDENA name, the poll frequency and its identity params', () => {
-  const device = buildDevice(gladys, devices.get(MOWER_ID), config);
+  const device = buildDevice(gladys, devices.get(MOWER_ID));
 
   assert.equal(device.name, 'SILENO');
   assert.equal(device.external_id, `ext:test:gardena:${MOWER_ID}`);
-  assert.equal(device.poll_frequency, config.poll_frequency);
   assert.deepEqual(
     device.params.find((param) => param.name === 'GARDENA_MODEL'),
     { name: 'GARDENA_MODEL', value: 'GARDENA smart Mower' },
@@ -59,8 +62,8 @@ test('a device is published with the GARDENA name, the poll frequency and its id
 });
 
 test('every device gets its battery and signal features, mains-powered ones excepted', () => {
-  const mower = buildDevice(gladys, devices.get(MOWER_ID), config);
-  const socket = buildDevice(gladys, devices.get(POWER_SOCKET_ID), config);
+  const mower = buildDevice(gladys, devices.get(MOWER_ID));
+  const socket = buildDevice(gladys, devices.get(POWER_SOCKET_ID));
 
   const battery = mower.features.find((feature) => feature.external_id.endsWith('common-battery'));
   assert.equal(battery.category, DEVICE_FEATURE_CATEGORIES.BATTERY);
@@ -125,8 +128,8 @@ test('the mower switch maps to the configured start and stop commands', () => {
 });
 
 test('a Water Control exposes one valve, an Irrigation Control exposes one group per outlet', () => {
-  const waterControl = buildDevice(gladys, devices.get(WATER_CONTROL_ID), config);
-  const irrigation = buildDevice(gladys, devices.get(IRRIGATION_CONTROL_ID), config);
+  const waterControl = buildDevice(gladys, devices.get(WATER_CONTROL_ID));
+  const irrigation = buildDevice(gladys, devices.get(IRRIGATION_CONTROL_ID));
 
   assert.equal(
     waterControl.features.filter((feature) => feature.external_id.endsWith('on-off')).length,
@@ -195,7 +198,7 @@ test('a power socket honours the switch-on mode', () => {
 });
 
 test('the sensor publishes only the measurements its model reports', () => {
-  const sensorDevice = buildDevice(gladys, devices.get(SENSOR_ID), config);
+  const sensorDevice = buildDevice(gladys, devices.get(SENSOR_ID));
   const keys = sensorDevice.features.map((feature) => feature.external_id.split(':').pop());
 
   assert.ok(keys.includes('sensor-0-soil-humidity'));
@@ -231,9 +234,76 @@ test('a duration in minutes becomes the seconds GARDENA expects, and stays sane'
   assert.equal(minutesToSeconds(99999), 86400, 'clamped to a day');
 });
 
+// ---------------------------------------------------------------------------
+// The publication contract enforced by the Gladys core. These values are NOT
+// free-form, and the core rejects the whole batch when one field is off:
+//   - `poll_frequency` is an enum in MILLISECONDS (DEVICE_POLL_FREQUENCIES in
+//     server/utils/constants.js), not a number of seconds — anything else is
+//     "invalid poll frequency" at publication time;
+//   - `min` and `max` are NOT NULL on every feature (t_device_feature model),
+//     including binary switches and text sensors — a missing one is only
+//     rejected later, when the user creates the device.
+// Both were real bugs; this test is what keeps them fixed.
+// ---------------------------------------------------------------------------
+const GLADYS_POLL_FREQUENCIES_MS = [1000, 2000, 10000, 15000, 30000, 60000];
+
+test('every published device satisfies the Gladys core publication contract', () => {
+  for (const gardenaDevice of devices.values()) {
+    const device = buildDevice(gladys, gardenaDevice);
+
+    assert.ok(
+      GLADYS_POLL_FREQUENCIES_MS.includes(device.poll_frequency),
+      `${device.name}: poll_frequency ${device.poll_frequency} is not a Gladys poll frequency`,
+    );
+    assert.ok(device.features.length > 0, `${device.name}: no feature`);
+
+    for (const feature of device.features) {
+      const where = `${device.name} / ${feature.name}`;
+      assert.equal(typeof feature.name, 'string', `${where}: name required`);
+      assert.ok(feature.name.length > 0, `${where}: name must not be empty`);
+      assert.equal(typeof feature.min, 'number', `${where}: min is NOT NULL in Gladys`);
+      assert.equal(typeof feature.max, 'number', `${where}: max is NOT NULL in Gladys`);
+      assert.ok(feature.min <= feature.max, `${where}: min must not exceed max`);
+      assert.equal(typeof feature.read_only, 'boolean', `${where}: read_only required`);
+      assert.equal(typeof feature.has_feedback, 'boolean', `${where}: has_feedback required`);
+      // Categories, types and units must exist in the Gladys catalog; the SDK
+      // constants are a verbatim mirror of it.
+      assert.ok(
+        Object.values(DEVICE_FEATURE_CATEGORIES).includes(feature.category),
+        `${where}: unknown category ${feature.category}`,
+      );
+      assert.ok(
+        Object.values(DEVICE_FEATURE_TYPES)
+          .flatMap((types) => Object.values(types))
+          .includes(feature.type),
+        `${where}: unknown type ${feature.type}`,
+      );
+      if (feature.unit !== undefined) {
+        assert.ok(
+          Object.values(DEVICE_FEATURE_UNITS).includes(feature.unit),
+          `${where}: unknown unit ${feature.unit}`,
+        );
+      }
+    }
+  }
+});
+
+test('device params never use the GLADYS_ prefix, reserved by the core', () => {
+  for (const gardenaDevice of devices.values()) {
+    for (const param of buildDevice(gladys, gardenaDevice).params) {
+      assert.equal(
+        param.name.toUpperCase().startsWith('GLADYS_'),
+        false,
+        `${param.name}: the GLADYS_* namespace is reserved and rejects the publication`,
+      );
+      assert.equal(typeof param.value, 'string', `${param.name}: params store strings`);
+    }
+  }
+});
+
 test('external ids are stable across two independent builds', () => {
-  const first = buildDevice(gladys, devices.get(IRRIGATION_CONTROL_ID), config);
-  const second = buildDevice(createFakeGladys(), devices.get(IRRIGATION_CONTROL_ID), config);
+  const first = buildDevice(gladys, devices.get(IRRIGATION_CONTROL_ID));
+  const second = buildDevice(createFakeGladys(), devices.get(IRRIGATION_CONTROL_ID));
   assert.deepEqual(
     first.features.map((feature) => feature.external_id),
     second.features.map((feature) => feature.external_id),
