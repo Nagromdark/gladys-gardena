@@ -153,3 +153,9 @@ gives you the changes.
 **No device in the Discover tab** — check that your devices show up in the
 GARDENA app, and that the location filter (if you set one) matches the right
 garden.
+
+---
+
+_GARDENA is a registered trademark of the Husqvarna Group. This is an
+independent community integration, neither affiliated with, endorsed by nor
+supported by GARDENA or the Husqvarna Group._

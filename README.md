@@ -119,8 +119,10 @@ npx github:GladysAssistant/integration-store .
 3. The decentralized indexer picks up the new manifest version and Gladys offers
    a one-click install or update.
 
-Replace `cover.png` (800×534 px, ≤150 KB) with a GARDENA-flavoured cover before
-publishing: the bundled one is the template's plain gradient placeholder.
+`cover.png` (800×534 px, 82 KB) carries the GARDENA logo, used to identify the
+product this integration talks to. It is the manufacturer's registered
+trademark: this is an independent community integration, not a GARDENA or
+Husqvarna Group product, and it is neither endorsed nor supported by them.
 
 ## License
 

@@ -162,3 +162,9 @@ temps réel vous donne déjà les changements.
 **Aucun appareil dans l'onglet Découvrir** — vérifiez que vos appareils
 apparaissent bien dans l'application GARDENA, et que le filtre d'emplacement (si
 vous en avez mis un) correspond au bon jardin.
+
+---
+
+_GARDENA est une marque déposée du groupe Husqvarna. Cette intégration
+communautaire est indépendante : elle n'est ni affiliée à GARDENA ou au groupe
+Husqvarna, ni approuvée ou supportée par eux._
