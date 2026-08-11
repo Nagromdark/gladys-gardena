@@ -6,16 +6,21 @@
     "en": "Control your GARDENA mowers, valves, power sockets and sensors from Gladys.",
     "fr": "Pilotez vos tondeuses, vannes, prises et capteurs GARDENA depuis Gladys."
   },
-  "version": "1.0.0",
-  "docker_image": "ghcr.io/nagromdark/gladys-gardena:1.0.0",
+  "version": "1.0.1",
+  "docker_image": "ghcr.io/nagromdark/gladys-gardena:1.0.1",
   "gladys_version": ">=4.85.0",
   "cover_image": "https://raw.githubusercontent.com/Nagromdark/gladys-gardena/main/cover.png",
-  "transports": ["cloud"],
+  "transports": [
+    "cloud"
+  ],
   "config_schema": [
     {
       "key": "intro",
       "type": "section",
-      "label": { "en": "Connect your GARDENA account", "fr": "Connectez votre compte GARDENA" },
+      "label": {
+        "en": "Connect your GARDENA account",
+        "fr": "Connectez votre compte GARDENA"
+      },
       "description": {
         "en": "This integration uses the official public GARDENA smart system API. Create a free account on the Husqvarna developer portal, sign in with your GARDENA (Husqvarna) account, create an application, connect the \"GARDENA smart system API\" to it, then copy its Application key and Application secret below.",
         "fr": "Cette intégration utilise l'API publique officielle GARDENA smart system. Créez un compte gratuit sur le portail développeur Husqvarna, connectez-vous avec votre compte GARDENA (Husqvarna), créez une application, connectez-lui l'API « GARDENA smart system API », puis copiez sa clé et son secret d'application ci-dessous."
@@ -23,18 +28,27 @@
       "links": [
         {
           "url": "https://developer.husqvarnagroup.cloud/",
-          "label": { "en": "Husqvarna developer portal", "fr": "Portail développeur Husqvarna" }
+          "label": {
+            "en": "Husqvarna developer portal",
+            "fr": "Portail développeur Husqvarna"
+          }
         },
         {
           "url": "https://developer.husqvarnagroup.cloud/apis/gardena-smart-system-api",
-          "label": { "en": "GARDENA smart system API", "fr": "API GARDENA smart system" }
+          "label": {
+            "en": "GARDENA smart system API",
+            "fr": "API GARDENA smart system"
+          }
         }
       ]
     },
     {
       "key": "application_key",
       "type": "string",
-      "label": { "en": "Application key", "fr": "Clé d'application" },
+      "label": {
+        "en": "Application key",
+        "fr": "Clé d'application"
+      },
       "description": {
         "en": "The Application key of your application on the Husqvarna developer portal.",
         "fr": "La clé d'application de votre application sur le portail développeur Husqvarna."
@@ -48,7 +62,10 @@
     {
       "key": "application_secret",
       "type": "secret",
-      "label": { "en": "Application secret", "fr": "Secret d'application" },
+      "label": {
+        "en": "Application secret",
+        "fr": "Secret d'application"
+      },
       "description": {
         "en": "The Application secret of the same application. It is stored encrypted and never sent back to the browser.",
         "fr": "Le secret d'application de cette même application. Il est stocké chiffré et n'est jamais renvoyé au navigateur."
@@ -58,7 +75,10 @@
     {
       "key": "location_id",
       "type": "string",
-      "label": { "en": "Location id (optional)", "fr": "Identifiant d'emplacement (optionnel)" },
+      "label": {
+        "en": "Location id (optional)",
+        "fr": "Identifiant d'emplacement (optionnel)"
+      },
       "description": {
         "en": "Restrict the integration to a single GARDENA location (garden). Leave empty to use every location of the account.",
         "fr": "Limiter l'intégration à un seul emplacement GARDENA (jardin). Laissez vide pour utiliser tous les emplacements du compte."
@@ -68,7 +88,10 @@
     {
       "key": "poll_frequency",
       "type": "number",
-      "label": { "en": "GARDENA API refresh (s)", "fr": "Relecture de l'API GARDENA (s)" },
+      "label": {
+        "en": "GARDENA API refresh (s)",
+        "fr": "Relecture de l'API GARDENA (s)"
+      },
       "description": {
         "en": "Minimum delay between two full reads of the GARDENA API, the safety net behind the real-time stream. GARDENA counts a weekly request quota and this is what spends it: one hour costs about 170 calls a week, fifteen minutes would cost about 670. Changes already arrive in real time, so keep it high.",
         "fr": "Délai minimum entre deux relectures complètes de l'API GARDENA, le filet de sécurité derrière le flux temps réel. GARDENA compte un quota hebdomadaire de requêtes et c'est ce réglage qui le consomme : une heure coûte environ 170 appels par semaine, quinze minutes en coûteraient environ 670. Les changements arrivent déjà en temps réel, gardez une valeur élevée."
@@ -81,7 +104,10 @@
     {
       "key": "default_duration",
       "type": "number",
-      "label": { "en": "Default duration (min)", "fr": "Durée par défaut (min)" },
+      "label": {
+        "en": "Default duration (min)",
+        "fr": "Durée par défaut (min)"
+      },
       "description": {
         "en": "How long a valve waters, or a power socket stays on, when you switch it on from Gladys.",
         "fr": "Durée d'arrosage d'une vanne, ou d'allumage d'une prise, lorsque vous l'activez depuis Gladys."
@@ -94,7 +120,10 @@
     {
       "key": "power_socket_on_mode",
       "type": "select",
-      "label": { "en": "Power socket switch-on", "fr": "Allumage des prises" },
+      "label": {
+        "en": "Power socket switch-on",
+        "fr": "Allumage des prises"
+      },
       "description": {
         "en": "What happens when a GARDENA power socket is switched on from Gladys.",
         "fr": "Ce qui se passe lorsqu'une prise GARDENA est allumée depuis Gladys."
@@ -111,14 +140,20 @@
         },
         {
           "value": "forever",
-          "label": { "en": "Stay on until switched off", "fr": "Rester allumée jusqu'à extinction" }
+          "label": {
+            "en": "Stay on until switched off",
+            "fr": "Rester allumée jusqu'à extinction"
+          }
         }
       ]
     },
     {
       "key": "mower_start_mode",
       "type": "select",
-      "label": { "en": "Mower start", "fr": "Démarrage de la tondeuse" },
+      "label": {
+        "en": "Mower start",
+        "fr": "Démarrage de la tondeuse"
+      },
       "description": {
         "en": "What starting the mower from Gladys means: let it obey its own calendar, or override it for a fixed duration.",
         "fr": "Ce que signifie démarrer la tondeuse depuis Gladys : la laisser suivre son calendrier, ou le forcer pendant une durée fixe."
@@ -128,7 +163,10 @@
       "options": [
         {
           "value": "schedule",
-          "label": { "en": "Obey the mower schedule", "fr": "Suivre le calendrier de la tondeuse" }
+          "label": {
+            "en": "Obey the mower schedule",
+            "fr": "Suivre le calendrier de la tondeuse"
+          }
         },
         {
           "value": "duration",
@@ -142,7 +180,10 @@
     {
       "key": "mower_duration",
       "type": "number",
-      "label": { "en": "Mowing duration (min)", "fr": "Durée de tonte (min)" },
+      "label": {
+        "en": "Mowing duration (min)",
+        "fr": "Durée de tonte (min)"
+      },
       "description": {
         "en": "Used when the mower start mode overrides the schedule.",
         "fr": "Utilisée lorsque le mode de démarrage force le calendrier."
@@ -155,7 +196,10 @@
     {
       "key": "mower_stop_mode",
       "type": "select",
-      "label": { "en": "Mower stop", "fr": "Arrêt de la tondeuse" },
+      "label": {
+        "en": "Mower stop",
+        "fr": "Arrêt de la tondeuse"
+      },
       "description": {
         "en": "What stopping the mower from Gladys means: park it until the next scheduled task, or cancel the schedule entirely.",
         "fr": "Ce que signifie arrêter la tondeuse depuis Gladys : la garer jusqu'à la prochaine tâche planifiée, ou annuler le calendrier."
@@ -183,7 +227,10 @@
   "actions": [
     {
       "key": "test_connection",
-      "label": { "en": "Test the connection", "fr": "Tester la connexion" },
+      "label": {
+        "en": "Test the connection",
+        "fr": "Tester la connexion"
+      },
       "description": {
         "en": "Authenticate on the GARDENA API and list the locations of the account.",
         "fr": "S'authentifier sur l'API GARDENA et lister les emplacements du compte."
@@ -192,7 +239,10 @@
     },
     {
       "key": "refresh_devices",
-      "label": { "en": "Refresh the devices", "fr": "Rafraîchir les appareils" },
+      "label": {
+        "en": "Refresh the devices",
+        "fr": "Rafraîchir les appareils"
+      },
       "description": {
         "en": "Re-read the GARDENA account, for example after adding a device in the GARDENA app.",
         "fr": "Relire le compte GARDENA, par exemple après avoir ajouté un appareil dans l'application GARDENA."
@@ -201,7 +251,10 @@
     },
     {
       "key": "stop_all_watering",
-      "label": { "en": "Stop all watering", "fr": "Arrêter tout l'arrosage" },
+      "label": {
+        "en": "Stop all watering",
+        "fr": "Arrêter tout l'arrosage"
+      },
       "description": {
         "en": "Close every valve of the chosen device until its next scheduled task.",
         "fr": "Fermer toutes les vannes de l'appareil choisi jusqu'à sa prochaine tâche planifiée."
@@ -212,7 +265,10 @@
           "key": "device",
           "type": "select",
           "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
+          "label": {
+            "en": "Device",
+            "fr": "Appareil"
+          },
           "required": true
         }
       ]
