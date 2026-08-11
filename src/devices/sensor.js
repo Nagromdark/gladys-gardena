@@ -24,7 +24,9 @@ const MEASUREMENTS = [
     key: 'soil-humidity',
     name: 'Soil humidity',
     category: DEVICE_FEATURE_CATEGORIES.SOIL_MOISTURE_SENSOR,
-    type: DEVICE_FEATURE_TYPES.SENSOR.INTEGER,
+    // Gladys only renders `soil-moisture-sensor` as a DECIMAL: published as an
+    // integer, the feature shows up as a blank chip with no icon and no label.
+    type: DEVICE_FEATURE_TYPES.SENSOR.DECIMAL,
     unit: DEVICE_FEATURE_UNITS.PERCENT,
     min: 0,
     max: 100,

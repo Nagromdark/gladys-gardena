@@ -288,6 +288,34 @@ test('every published device satisfies the Gladys core publication contract', ()
   }
 });
 
+// The Gladys frontend renders a feature from its (category, type) PAIR: the
+// icon and the label both come from DeviceFeatureCategoriesIcon
+// (front/src/utils/consts.js). A pair missing from that map is accepted by the
+// server but displayed as a blank chip — which is how the soil humidity shipped
+// as an integer went unnoticed until it reached a real garden. Any new feature
+// must be added here on purpose, after checking the pair exists in the front.
+const RENDERED_PAIRS = new Set([
+  'battery/integer',
+  'signal/integer',
+  'switch/binary',
+  'text/text',
+  'duration/integer',
+  'soil-moisture-sensor/decimal',
+  'temperature-sensor/decimal',
+  'light-sensor/integer',
+]);
+
+test('every feature uses a category/type pair the Gladys UI knows how to render', () => {
+  for (const gardenaDevice of devices.values()) {
+    for (const feature of buildDevice(gladys, gardenaDevice).features) {
+      assert.ok(
+        RENDERED_PAIRS.has(`${feature.category}/${feature.type}`),
+        `${feature.name}: ${feature.category}/${feature.type} would render as a blank chip`,
+      );
+    }
+  }
+});
+
 test('device params never use the GLADYS_ prefix, reserved by the core', () => {
   for (const gardenaDevice of devices.values()) {
     for (const param of buildDevice(gladys, gardenaDevice).params) {
