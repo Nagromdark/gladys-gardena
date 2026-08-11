@@ -274,6 +274,71 @@ test('polling several devices costs a single API call', async () => {
   assert.equal(client.locationCalls, callsAfterStart, 'the fresh picture is shared');
 });
 
+// ---------------------------------------------------------------------------
+// The GARDENA quota is counted per WEEK, not per second: a refresh that looks
+// harmless in isolation ("every 15 minutes, surely that is fine") costs 672
+// calls a week and blows a 1000-call budget on its own. These tests pin the
+// arithmetic, because nothing else in the system will complain until the API
+// starts answering 429 — days later.
+// ---------------------------------------------------------------------------
+const WEEK_SECONDS = 7 * 24 * 3600;
+
+test('the refresh interval is honoured exactly, so the weekly cost is predictable', async () => {
+  const { service, client } = createService();
+  await service.start(CONFIG);
+  const callsAfterStart = client.locationCalls;
+
+  // One hour by default: the picture is reused, whoever asks and however often.
+  assert.equal(service.refreshIntervalMs(), 3600 * 1000);
+
+  service.lastRefreshAt = Date.now() - 59 * 60 * 1000;
+  await service.onPoll({ external_id: `ext:test:gardena:${MOWER_ID}` });
+  assert.equal(client.locationCalls, callsAfterStart, 'still fresh: no API call');
+
+  service.lastRefreshAt = Date.now() - 61 * 60 * 1000;
+  await service.onPoll({ external_id: `ext:test:gardena:${MOWER_ID}` });
+  assert.equal(client.locationCalls, callsAfterStart + 1, 'past the interval: one call');
+
+  // The budget the documentation announces, from the code's own interval.
+  const refreshesPerWeek = WEEK_SECONDS / (service.refreshIntervalMs() / 1000);
+  assert.equal(refreshesPerWeek, 168);
+  assert.ok(refreshesPerWeek < 200, 'the default must stay far below a 1000/week quota');
+});
+
+test('a websocket reconnection does not force a read, it follows the same interval', async () => {
+  // GARDENA closes the stream every ~2 hours by design: a forced read on every
+  // reconnection would silently add ~84 calls a week, on top of the refreshes.
+  const { service, client, streams } = createService();
+  await service.start(CONFIG);
+  const callsAfterStart = client.locationCalls;
+
+  streams[0].onOpen();
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(client.locationCalls, callsAfterStart, 'the fresh picture is reused');
+});
+
+test('a 429 suspends the REST refreshes instead of insisting', async () => {
+  const { service, client } = createService();
+  await service.start(CONFIG);
+
+  const throttled = new Error('Too Many Requests');
+  throttled.status = 429;
+  client.getLocation = async () => {
+    client.locationCalls += 1;
+    throw throttled;
+  };
+
+  await assert.rejects(() => service.refreshLocations({ maxAgeMs: 0 }));
+  const callsAfterThrottle = client.locationCalls;
+  assert.ok(service.throttledUntil > Date.now(), 'a pause is armed');
+
+  // Even an explicit "refresh now" stays quiet during the pause.
+  await service.refreshLocations({ maxAgeMs: 0 });
+  assert.equal(client.locationCalls, callsAfterThrottle, 'no further call while throttled');
+});
+
 test('changing the credentials restarts the session, changing a duration does not', async () => {
   const { service, gladys, streams } = createService();
   await service.start(CONFIG);

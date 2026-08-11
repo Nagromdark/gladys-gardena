@@ -19,9 +19,11 @@ export const DEFAULT_CONFIG = {
   application_secret: '',
   // Empty: every location (garden) of the account is used.
   location_id: '',
-  // Seconds. The websocket carries the real-time changes, so this is only the
-  // safety net: the GARDENA API is rate-limited, do not go below 5 minutes.
-  poll_frequency: 900,
+  // Seconds between two full reads of the GARDENA API. The websocket carries
+  // the real-time changes, so this is only the safety net — and the GARDENA
+  // quota is counted per WEEK, so it is what mainly spends it: one hour costs
+  // ~168 calls a week, fifteen minutes would cost ~672. See docs/en.md.
+  poll_frequency: 3600,
   // Minutes. Applied when a valve or a power socket is switched ON.
   default_duration: 30,
   // 'duration' (switch off automatically) | 'forever' (stay on).

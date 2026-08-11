@@ -40,6 +40,11 @@ const COMMAND_CONFIRMATION_DELAY_MS = 5000;
 // bit (several messages arrive in a burst) then resynchronize over REST.
 const UNKNOWN_DEVICE_REFRESH_DELAY_MS = 10 * 1000;
 
+// GARDENA answered 429: how long REST refreshes are suspended. The quota is
+// counted per week, so a wide pause costs nothing in freshness (the websocket
+// keeps pushing) and protects what is left of the budget.
+const THROTTLE_PAUSE_MS = 60 * 60 * 1000;
+
 export class GardenaService {
   /**
    * @param {object} gladys - The Gladys SDK instance.
@@ -64,6 +69,8 @@ export class GardenaService {
     /** @type {Map<string, string>} Last published transport, by device external id. */
     this.lastTransports = new Map();
     this.lastRefreshAt = 0;
+    // Timestamp until which REST refreshes are suspended after a 429.
+    this.throttledUntil = 0;
     this.pendingRefresh = null;
     this.unknownDeviceTimer = null;
     this.connectedStreams = 0;
@@ -146,6 +153,7 @@ export class GardenaService {
     this.lastStates.clear();
     this.lastTransports.clear();
     this.lastRefreshAt = 0;
+    this.throttledUntil = 0;
     await this.start(config);
   }
 
@@ -178,6 +186,12 @@ export class GardenaService {
     if (maxAgeMs > 0 && Date.now() - this.lastRefreshAt < maxAgeMs) {
       return;
     }
+    // GARDENA already said "too many requests": insisting only digs the hole,
+    // and the websocket keeps feeding us in the meantime.
+    if (Date.now() < this.throttledUntil) {
+      logger.debug('Refresh skipped: the GARDENA API is throttling us');
+      return;
+    }
     if (this.pendingRefresh) {
       await this.pendingRefresh;
       return;
@@ -190,16 +204,41 @@ export class GardenaService {
 
   async doRefreshLocations() {
     const devices = new Map();
-    for (const location of this.locations) {
-      const payload = await this.client.getLocation(location.id);
-      for (const [id, device] of parseLocation(payload, location.name)) {
-        devices.set(id, device);
+    try {
+      for (const location of this.locations) {
+        const payload = await this.client.getLocation(location.id);
+        for (const [id, device] of parseLocation(payload, location.name)) {
+          devices.set(id, device);
+        }
       }
+    } catch (err) {
+      if (err.status === 429) {
+        this.throttledUntil = Date.now() + THROTTLE_PAUSE_MS;
+        logger.warn(
+          `GARDENA is throttling the integration: REST refreshes paused for ${
+            THROTTLE_PAUSE_MS / 60000
+          } minutes (the real-time stream keeps running)`,
+        );
+      }
+      throw err;
     }
     this.devices = devices;
     this.rebuildCommandIndex();
     this.lastRefreshAt = Date.now();
     logger.debug(`Picture refreshed: ${this.devices.size} device(s)`);
+  }
+
+  /**
+   * The user's refresh interval, in milliseconds.
+   *
+   * This is THE knob that spends the GARDENA weekly request quota: one full
+   * read per interval, whatever the number of devices. It is applied as-is (no
+   * safety margin shaving it down), so the number of calls a week is exactly
+   * the one the documentation announces for the configured value.
+   * @returns {number} Interval in ms.
+   */
+  refreshIntervalMs() {
+    return this.config.poll_frequency * 1000;
   }
 
   rebuildCommandIndex() {
@@ -224,8 +263,12 @@ export class GardenaService {
         onMessage: (message) => this.handleRealtimeMessage(message),
         onOpen: () => {
           this.connectedStreams += 1;
-          // A reconnection means we were blind for a while: resynchronize.
-          this.refreshLocations({ maxAgeMs: 30_000 })
+          // A reconnection means we were blind for a while, so resynchronize —
+          // but GARDENA hangs up every ~2 hours by design, and a forced read on
+          // every reconnection would silently double the weekly quota spending.
+          // The normal refresh interval applies here too: the gap is a few
+          // seconds, and anything missed lands at the next refresh.
+          this.refreshLocations({ maxAgeMs: this.refreshIntervalMs() })
             .then(() => this.publishAllStates())
             .then(() => this.publishTransports())
             .catch((err) => logger.warn(`Resynchronization failed: ${err.message}`));
@@ -453,7 +496,7 @@ export class GardenaService {
     if (!this.client) {
       return;
     }
-    await this.refreshLocations({ maxAgeMs: this.config.poll_frequency * 800 });
+    await this.refreshLocations({ maxAgeMs: this.refreshIntervalMs() });
     const device = [...this.devices.values()].find(
       (candidate) => idsOf(this.gladys, candidate).device === gladysDevice.external_id,
     );

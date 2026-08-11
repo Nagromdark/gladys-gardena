@@ -46,14 +46,14 @@ parle qu'au cloud GARDENA. Une connexion Internet est donc nécessaire.
 
 Réglages optionnels :
 
-| Réglage                        | Rôle                                                                                                                                                                                                                       |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Identifiant d'emplacement**  | Limiter l'intégration à un seul jardin. Laissez vide pour tous les utiliser.                                                                                                                                               |
-| **Relecture de l'API GARDENA** | Délai minimum entre deux relectures complètes de l'API GARDENA, le filet de sécurité derrière le flux temps réel. GARDENA limite le débit de son API : gardez une valeur élevée, les changements arrivent déjà en 1 à 2 s. |
-| **Durée par défaut**           | Durée d'arrosage d'une vanne, ou d'allumage d'une prise, quand vous l'activez depuis Gladys.                                                                                                                               |
-| **Allumage des prises**        | Éteindre automatiquement après la durée par défaut, ou rester allumée jusqu'à extinction.                                                                                                                                  |
-| **Démarrage de la tondeuse**   | Démarrer la tondeuse peut suivre son propre calendrier, ou le forcer pendant une durée fixe.                                                                                                                               |
-| **Arrêt de la tondeuse**       | Arrêter la tondeuse peut la garer jusqu'à sa prochaine tâche planifiée, ou annuler le calendrier jusqu'à nouvel ordre.                                                                                                     |
+| Réglage                        | Rôle                                                                                                                                                                                                                                     |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Identifiant d'emplacement**  | Limiter l'intégration à un seul jardin. Laissez vide pour tous les utiliser.                                                                                                                                                             |
+| **Relecture de l'API GARDENA** | Délai minimum entre deux relectures complètes de l'API GARDENA, le filet de sécurité derrière le flux temps réel. C'est ce réglage qui consomme votre quota hebdomadaire de requêtes — voir le tableau plus bas. Par défaut : une heure. |
+| **Durée par défaut**           | Durée d'arrosage d'une vanne, ou d'allumage d'une prise, quand vous l'activez depuis Gladys.                                                                                                                                             |
+| **Allumage des prises**        | Éteindre automatiquement après la durée par défaut, ou rester allumée jusqu'à extinction.                                                                                                                                                |
+| **Démarrage de la tondeuse**   | Démarrer la tondeuse peut suivre son propre calendrier, ou le forcer pendant une durée fixe.                                                                                                                                             |
+| **Arrêt de la tondeuse**       | Arrêter la tondeuse peut la garer jusqu'à sa prochaine tâche planifiée, ou annuler le calendrier jusqu'à nouvel ordre.                                                                                                                   |
 
 ## Ce que vous obtenez dans Gladys
 
@@ -90,6 +90,47 @@ disponible), mais cette interrogation **n'appelle pas** GARDENA : l'intégration
 répond depuis l'image qu'elle a déjà en mémoire, et ne relit l'API GARDENA que
 lorsque cette image dépasse l'âge du réglage **Relecture de l'API GARDENA**.
 Quel que soit le nombre d'appareils du jardin, une relecture coûte un appel.
+
+## Rester dans le quota de requêtes GARDENA
+
+GARDENA accorde un **nombre limité de requêtes API par semaine** à une
+application personnelle gratuite. L'intégration est construite autour de cette
+contrainte : le websocket temps réel ne coûte rien par événement, si bien que
+les requêtes consommées sont presque uniquement celles de la relecture
+périodique de sécurité.
+
+Ce que coûte une semaine, quel que soit le nombre d'appareils du jardin (une
+relecture lit tout l'emplacement en un seul appel) :
+
+| Relecture de l'API GARDENA | Relectures | URL websocket | Jetons | **Total / semaine** |
+| -------------------------- | ---------- | ------------- | ------ | ------------------- |
+| 15 minutes                 | 672        | 84            | 7      | **763**             |
+| 30 minutes                 | 336        | 84            | 7      | **427**             |
+| **1 heure (par défaut)**   | **168**    | **84**        | **7**  | **259**             |
+| 2 heures                   | 84         | 84            | 7      | **175**             |
+| 6 heures                   | 28         | 84            | 7      | **119**             |
+
+Les deux coûts fixes sont incompressibles : GARDENA ferme le flux temps réel
+toutes les deux heures environ et il faut redemander une URL (~84 par semaine),
+et le jeton d'accès est renouvelé chaque jour (7 par semaine, sur l'API
+d'authentification, distincte).
+
+Les commandes ajoutent une requête chacune — ouvrir une vanne, allumer une
+prise, démarrer la tondeuse. Cent commandes par semaine, cent requêtes : avec la
+relecture par défaut, la marge reste large.
+
+Deux réflexes suffisent :
+
+- **ne descendez pas la relecture sous une heure** sans savoir que votre quota
+  le permet. Le flux temps réel apporte déjà tous les changements en quelques
+  secondes ; la relecture ne rattrape que ce qu'un websocket coupé aurait pu
+  manquer ;
+- **évitez de redémarrer l'intégration en boucle** : chaque démarrage coûte un
+  listing des emplacements plus une relecture complète.
+
+Si GARDENA répond malgré tout « trop de requêtes », l'intégration **suspend
+d'elle-même ses relectures REST pendant une heure** et continue de fonctionner
+sur le flux temps réel, au lieu d'insister et d'aggraver la situation.
 
 ## Actions
 

@@ -70,12 +70,12 @@
       "type": "number",
       "label": { "en": "GARDENA API refresh (s)", "fr": "Relecture de l'API GARDENA (s)" },
       "description": {
-        "en": "Minimum delay between two full reads of the GARDENA API, the safety net behind the real-time stream. The API is rate-limited: keep it high, changes already arrive in real time.",
-        "fr": "Délai minimum entre deux relectures complètes de l'API GARDENA, le filet de sécurité derrière le flux temps réel. L'API est limitée en débit : gardez une valeur élevée, les changements arrivent déjà en temps réel."
+        "en": "Minimum delay between two full reads of the GARDENA API, the safety net behind the real-time stream. GARDENA counts a weekly request quota and this is what spends it: one hour costs about 170 calls a week, fifteen minutes would cost about 670. Changes already arrive in real time, so keep it high.",
+        "fr": "Délai minimum entre deux relectures complètes de l'API GARDENA, le filet de sécurité derrière le flux temps réel. GARDENA compte un quota hebdomadaire de requêtes et c'est ce réglage qui le consomme : une heure coûte environ 170 appels par semaine, quinze minutes en coûteraient environ 670. Les changements arrivent déjà en temps réel, gardez une valeur élevée."
       },
       "required": false,
-      "default": 900,
-      "min": 300,
+      "default": 3600,
+      "min": 900,
       "max": 86400
     },
     {

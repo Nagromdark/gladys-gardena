@@ -44,14 +44,14 @@ GARDENA cloud. An Internet connection is therefore required.
 
 Optional settings:
 
-| Setting                    | What it does                                                                                                                                                                                   |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Location id**            | Restrict the integration to a single garden. Leave empty to use all of them.                                                                                                                   |
-| **GARDENA API refresh**    | Minimum delay between two full reads of the GARDENA API, the safety net behind the real-time stream. GARDENA rate-limits its API: keep it high, changes already arrive within a second or two. |
-| **Default duration**       | How long a valve waters, or a socket stays on, when you switch it on from Gladys.                                                                                                              |
-| **Power socket switch-on** | Switch off automatically after the default duration, or stay on until switched off.                                                                                                            |
-| **Mower start**            | Starting the mower can obey its own calendar, or override it for a fixed duration.                                                                                                             |
-| **Mower stop**             | Stopping the mower can park it until its next scheduled task, or cancel the schedule until further notice.                                                                                     |
+| Setting                    | What it does                                                                                                                                                                                 |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Location id**            | Restrict the integration to a single garden. Leave empty to use all of them.                                                                                                                 |
+| **GARDENA API refresh**    | Minimum delay between two full reads of the GARDENA API, the safety net behind the real-time stream. This is what spends your weekly request quota — see the table below. Default: one hour. |
+| **Default duration**       | How long a valve waters, or a socket stays on, when you switch it on from Gladys.                                                                                                            |
+| **Power socket switch-on** | Switch off automatically after the default duration, or stay on until switched off.                                                                                                          |
+| **Mower start**            | Starting the mower can obey its own calendar, or override it for a fixed duration.                                                                                                           |
+| **Mower stop**             | Stopping the mower can park it until its next scheduled task, or cancel the schedule until further notice.                                                                                   |
 
 ## What you get in Gladys
 
@@ -86,6 +86,44 @@ that tick does **not** call GARDENA: the integration answers from the picture it
 already holds, and only re-reads the GARDENA API once the picture is older than
 the **GARDENA API refresh** setting. Whatever the number of devices in your
 garden, one refresh costs one API call.
+
+## Staying inside the GARDENA request quota
+
+GARDENA grants a **limited number of API requests per week** to a free personal
+application. This integration is built around that constraint: the real-time
+websocket costs nothing per event, so the requests it spends are almost entirely
+the periodic safety-net refresh.
+
+What one week costs, whatever the number of devices in your garden (a refresh
+reads the whole location in a single call):
+
+| GARDENA API refresh  | Refreshes | Websocket URLs | Tokens | **Total / week** |
+| -------------------- | --------- | -------------- | ------ | ---------------- |
+| 15 minutes           | 672       | 84             | 7      | **763**          |
+| 30 minutes           | 336       | 84             | 7      | **427**          |
+| **1 hour (default)** | **168**   | **84**         | **7**  | **259**          |
+| 2 hours              | 84        | 84             | 7      | **175**          |
+| 6 hours              | 28        | 84             | 7      | **119**          |
+
+The two fixed costs are unavoidable: GARDENA closes the real-time stream about
+every two hours and a new URL must be requested (~84 a week), and the access
+token is renewed daily (7 a week, on the separate authentication API).
+
+Commands add one request each — switching a valve or a socket, starting the
+mower. A hundred commands a week is a hundred requests: with the default
+refresh, that still leaves a wide margin.
+
+Two habits keep you safe:
+
+- **do not lower the refresh below one hour** unless you know your quota allows
+  it. The real-time stream already brings every change within seconds; the
+  refresh only catches what a dropped websocket could have missed;
+- **avoid restarting the integration in a loop**: each start costs one location
+  listing plus one full read.
+
+If GARDENA ever answers "too many requests", the integration **suspends its REST
+refreshes for one hour** on its own and keeps running on the real-time stream,
+instead of insisting and digging the hole deeper.
 
 ## Actions
 
