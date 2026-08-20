@@ -36,6 +36,37 @@ test('the manifest describes a device integration talking to a cloud API', () =>
   );
 });
 
+// The catalog vocabulary of the store indexer (INTEGRATION_CATALOG_CATEGORIES).
+// Unknown keys are dropped with a warning rather than rejected, so a typo would
+// silently make the integration unlistable in that section — hence this list.
+const CATALOG_CATEGORIES = [
+  'climate',
+  'lighting',
+  'energy',
+  'security',
+  'multimedia',
+  'appliances',
+  'environment',
+  'protocols',
+  'network',
+  'notifications',
+  'assistants',
+  'services',
+];
+
+test('the catalog categories are valid and require a Gladys that knows them', () => {
+  const { categories } = manifest;
+  assert.ok(Array.isArray(categories), 'categories must be declared');
+  assert.ok(categories.length >= 1 && categories.length <= 3, '1 to 3 categories');
+  assert.equal(new Set(categories).size, categories.length, 'no duplicate');
+  for (const category of categories) {
+    assert.ok(CATALOG_CATEGORIES.includes(category), `unknown catalog category "${category}"`);
+  }
+  // Older cores reject unknown top-level manifest fields: declaring categories
+  // without raising the range turns the catalog filter into an install failure.
+  assert.match(manifest.gladys_version, /^>=4\.(8[6-9]|9\d)\./, 'categories require >=4.86.0');
+});
+
 test('every manifest action is registered in index.js', () => {
   for (const action of manifest.actions ?? []) {
     assert.match(

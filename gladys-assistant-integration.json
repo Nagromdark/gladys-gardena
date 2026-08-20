@@ -8,11 +8,10 @@
   },
   "version": "1.0.1",
   "docker_image": "ghcr.io/nagromdark/gladys-gardena:1.0.1",
-  "gladys_version": ">=4.85.0",
+  "gladys_version": ">=4.86.0",
   "cover_image": "https://raw.githubusercontent.com/Nagromdark/gladys-gardena/main/cover.png",
-  "transports": [
-    "cloud"
-  ],
+  "categories": ["appliances", "environment", "lighting"],
+  "transports": ["cloud"],
   "config_schema": [
     {
       "key": "intro",
