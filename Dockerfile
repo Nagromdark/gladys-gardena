@@ -24,7 +24,12 @@ COPY index.js ./
 COPY src ./src
 COPY gladys-assistant-integration.json ./
 
-# The only writable location allowed at runtime.
+# The only writable location allowed at runtime. Docker creates a new volume
+# with the owner of the image's /data, so it must belong to `node`, and before
+# VOLUME: changes made to /data after it are discarded. Without this, /data is
+# root-owned and the integration cannot write to it.
+RUN mkdir -p /data && chown node:node /data
+
 ENV NODE_ENV=production
 VOLUME ["/data"]
 

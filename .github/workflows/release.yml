@@ -39,12 +39,12 @@ jobs:
       version: ${{ steps.bump.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
 
@@ -64,12 +64,10 @@ jobs:
           image="ghcr.io/${GITHUB_REPOSITORY,,}:${new_version}"
 
           # Keep the manifest in lockstep: the version the indexer reads AND the
-          # image tag Gladys pulls must both point at this release.
-          tmp="$(mktemp)"
-          jq --arg version "$new_version" --arg image "$image" \
-            '.version = $version | .docker_image = $image' \
-            gladys-assistant-integration.json > "$tmp"
-          mv "$tmp" gladys-assistant-integration.json
+          # image tag Gladys pulls must both point at this release. The script
+          # rewrites those two values in place: jq reprinted the whole file,
+          # which left it unformatted and turned the next CI run red.
+          node .github/scripts/release.mjs "$new_version" "$image"
 
           echo "version=${new_version}" >> "$GITHUB_OUTPUT"
 
