@@ -17,8 +17,9 @@ import { SERVICE_TYPES } from '../gardena/constants.js';
 import { featureId, numberState } from './helpers.js';
 
 // One descriptor per measurement: the GARDENA attribute it reads, and the
-// Gladys feature it produces.
-const MEASUREMENTS = [
+// Gladys feature it produces. Exported so the dashboard widgets build their
+// tiles from the same descriptors, and can never drift from the feature keys.
+export const MEASUREMENTS = [
   {
     attribute: 'soilHumidity',
     key: 'soil-humidity',

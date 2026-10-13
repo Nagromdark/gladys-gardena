@@ -9,7 +9,9 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { validateWidgetContent } from '@gladysassistant/integration-sdk';
 import { GardenaService } from '../src/gardenaService.js';
+import { WIDGET_KEYS } from '../src/widgets/index.js';
 import { buildDevice } from '../src/devices/index.js';
 import { parseLocation } from '../src/gardena/model.js';
 import { normalizeConfig } from '../src/config.js';
@@ -71,7 +73,7 @@ function createFakeRealtime(streams) {
  * A service wired to the fixture, with every device already created in Gladys
  * (which is what the user does after the discovery screen).
  */
-async function createService({ createdDevices = 'all' } = {}) {
+async function createService({ createdDevices = 'all', ...serviceOptions } = {}) {
   const parsed = parseLocation(buildLocationPayload(), 'My Garden');
   const reference = createFakeGladys();
   const discovered = [...parsed.values()].map((device) => buildDevice(reference, device));
@@ -80,15 +82,24 @@ async function createService({ createdDevices = 'all' } = {}) {
       ? discovered.map(asCreatedDevice)
       : createdDevices.map(asCreatedDevice);
   const gladys = createFakeGladys({ devices });
-  // A real GladysIntegration: `gladys.devices` is served by the in-memory
-  // Gladys and loaded on connection, like in production.
-  await gladys.connect();
   const client = createFakeClient();
   const streams = [];
   const service = new GardenaService(gladys, {
     createClient: () => client,
     createRealtime: createFakeRealtime(streams),
+    ...serviceOptions,
   });
+  // Mirror the widget wiring of index.js: the handlers are registered before
+  // connect(), exactly as in production.
+  for (const key of WIDGET_KEYS) {
+    gladys.onWidgetGet(key, (options) => service.getWidgetContent(key, options));
+    gladys.onWidgetAction(key, (actionKey, params, options) =>
+      service.runWidgetAction(key, actionKey, params, options),
+    );
+  }
+  // A real GladysIntegration: `gladys.devices` is served by the in-memory
+  // Gladys and loaded on connection, like in production.
+  await gladys.connect();
   return { service, gladys, client, streams, discovered };
 }
 
@@ -388,4 +399,151 @@ test('stopping closes every real-time stream', async () => {
   service.stop();
 
   assert.equal(streams[0].stopped, true);
+});
+
+// ---------------------------------------------------------------------------
+// Dashboard widgets. The headline property is the one the whole integration is
+// built around: showing a card must not spend a single GARDENA request.
+// ---------------------------------------------------------------------------
+
+test('showing the widgets costs zero GARDENA request', async () => {
+  const { service, gladys, client } = await createService();
+  await service.start(CONFIG);
+  const restCalls = client.locationCalls;
+  const wsCalls = client.websocketCalls;
+
+  for (let i = 0; i < 5; i += 1) {
+    for (const key of ['watering', 'mower']) {
+      const ack = await gladys.fake.widgetGet(key, { language: 'fr' });
+      assert.equal(ack.success, true, `${key}: the content was refused`);
+      assert.deepEqual(validateWidgetContent(ack.data.content), [], `${key}: invalid content`);
+    }
+  }
+
+  assert.equal(client.locationCalls, restCalls, 'a dashboard must not re-read the GARDENA API');
+  assert.equal(client.websocketCalls, wsCalls);
+});
+
+test('the stop button closes every valve of the account', async () => {
+  const { service, gladys, client } = await createService();
+  await service.start(CONFIG);
+  const before = client.commands.length;
+
+  const ack = await gladys.fake.widgetAction('watering', 'stop_watering', {});
+
+  assert.equal(ack.success, true);
+  const sent = client.commands.slice(before);
+  // The Water Control and the Irrigation Control each carry one valve set.
+  assert.equal(sent.length, 2);
+  for (const command of sent) {
+    assert.equal(command.controlType, 'VALVE_SET_CONTROL');
+    assert.equal(command.command, 'STOP_UNTIL_NEXT_TASK');
+  }
+  assert.match(ack.data.message.fr, /Arrosage arrêté/);
+});
+
+test('the watering form waters the chosen outlet for the typed duration', async () => {
+  const { service, gladys, client } = await createService();
+  await service.start(CONFIG);
+
+  const ack = await gladys.fake.widgetAction(
+    'watering',
+    'start_watering',
+    {},
+    { values: { valve: `${IRRIGATION_CONTROL_ID}:1`, minutes: 20 } },
+  );
+
+  assert.equal(ack.success, true);
+  assert.deepEqual(client.commands.at(-1), {
+    serviceId: `${IRRIGATION_CONTROL_ID}:1`,
+    controlType: 'VALVE_CONTROL',
+    command: 'START_SECONDS_TO_OVERRIDE',
+    attributes: { seconds: 1200 },
+  });
+});
+
+test('a widget action on an outlet that no longer exists is refused', async () => {
+  const { service, gladys, client } = await createService();
+  await service.start(CONFIG);
+  const before = client.commands.length;
+
+  const ack = await gladys.fake.widgetAction(
+    'watering',
+    'start_watering',
+    {},
+    { values: { valve: 'gone', minutes: 5 } },
+  );
+
+  assert.equal(ack.success, false);
+  assert.match(ack.error, /Unknown GARDENA valve/);
+  assert.equal(client.commands.length, before, 'nothing was sent');
+});
+
+/**
+ * A reader of the nudges sent from now on. `fake.widgetRefreshes` is a
+ * read-only snapshot, so the tests measure deltas rather than resetting it.
+ */
+function sinceNudges(gladys) {
+  const before = gladys.fake.widgetRefreshes.length;
+  return () => gladys.fake.widgetRefreshes.slice(before);
+}
+
+/** Wait until a condition holds, instead of betting on a fixed delay. */
+async function until(condition, timeoutMs = 2000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!condition() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  return condition();
+}
+
+test('a real-time change nudges only the card that shows it', async () => {
+  // Window 0: this test is about ROUTING, not about the rate limit, so it must
+  // not depend on a timer under a loaded test runner.
+  const { service, gladys, streams } = await createService({ widgetNudgeWindowMs: 0 });
+  await service.start(CONFIG);
+  const nudges = sinceNudges(gladys);
+
+  streams[0].onMessage({
+    id: MOWER_ID,
+    type: 'MOWER',
+    attributes: { activity: { value: 'PAUSED' } },
+  });
+  await Promise.resolve();
+
+  assert.deepEqual(nudges(), ['mower']);
+});
+
+test('a burst of messages is coalesced, and the last one is never swallowed', async () => {
+  // The core accepts one nudge per 10 s and per widget. A naive limiter would
+  // drop the END of a burst, i.e. the message carrying the final state.
+  const WINDOW = 50;
+  const { service, gladys, streams } = await createService({ widgetNudgeWindowMs: WINDOW });
+  await service.start(CONFIG);
+  // start() consumed the window: let it free up before measuring.
+  await new Promise((resolve) => setTimeout(resolve, WINDOW * 3));
+  const nudges = sinceNudges(gladys);
+
+  for (const activity of ['OK_LEAVING', 'OK_CUTTING', 'OK_SEARCHING']) {
+    streams[0].onMessage({
+      id: MOWER_ID,
+      type: 'MOWER',
+      attributes: { activity: { value: activity } },
+    });
+  }
+  assert.deepEqual(nudges(), ['mower'], 'the burst is coalesced into one nudge');
+
+  assert.ok(await until(() => nudges().length === 2), 'the final state is sent after the window');
+  assert.deepEqual(nudges(), ['mower', 'mower']);
+});
+
+test('a successful action does not nudge: the core already drops its cache', async () => {
+  // Window 0: any nudge would show up immediately, so an empty delta is proof.
+  const { service, gladys } = await createService({ widgetNudgeWindowMs: 0 });
+  await service.start(CONFIG);
+  const nudges = sinceNudges(gladys);
+
+  await gladys.fake.widgetAction('watering', 'stop_watering', {});
+
+  assert.deepEqual(nudges(), []);
 });

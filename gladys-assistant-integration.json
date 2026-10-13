@@ -8,10 +8,58 @@
   },
   "version": "1.0.2",
   "docker_image": "ghcr.io/nagromdark/gladys-gardena:1.0.2",
-  "gladys_version": ">=4.86.0",
+  "gladys_version": ">=5.1.0",
   "cover_image": "https://raw.githubusercontent.com/Nagromdark/gladys-gardena/main/cover.png",
   "categories": ["appliances", "environment"],
   "transports": ["cloud"],
+  "widgets": [
+    {
+      "key": "watering",
+      "label": { "en": "GARDENA watering", "fr": "Arrosage GARDENA" },
+      "description": {
+        "en": "Valves, outdoor socket and soil sensors, with a one-tap stop for all watering.",
+        "fr": "Vannes, prise d'extérieur et capteurs de sol, avec un bouton pour tout arrêter."
+      },
+      "icon": "droplet",
+      "action_timeout_seconds": 60,
+      "settings": [
+        {
+          "key": "sensor",
+          "type": "select",
+          "source": "devices",
+          "label": { "en": "Sensor", "fr": "Capteur" },
+          "description": {
+            "en": "Which sensor fills the tiles. Leave empty to show every sensor of the garden.",
+            "fr": "Le capteur affiché dans les tuiles. Laissez vide pour afficher tous les capteurs."
+          },
+          "required": false
+        }
+      ]
+    },
+    {
+      "key": "mower",
+      "label": { "en": "GARDENA mower", "fr": "Tondeuse GARDENA" },
+      "description": {
+        "en": "Activity, battery and operating hours of your mower, with start and park buttons.",
+        "fr": "Activité, batterie et heures de tonte de la tondeuse, avec démarrage et garage."
+      },
+      "icon": "scissors",
+      "action_timeout_seconds": 30,
+      "settings": [
+        {
+          "key": "mower",
+          "type": "select",
+          "source": "devices",
+          "label": { "en": "Mower", "fr": "Tondeuse" },
+          "description": {
+            "en": "Which mower this card controls. Leave empty if your garden has a single mower.",
+            "fr": "La tondeuse pilotée par cette carte. Laissez vide si le jardin n'en a qu'une."
+          },
+          "required": false
+        }
+      ]
+    }
+  ],
   "config_schema": [
     {
       "key": "intro",

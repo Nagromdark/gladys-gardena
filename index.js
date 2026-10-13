@@ -59,6 +59,21 @@ gladys.onAction('test_connection', () => gardena.testConnection());
 gladys.onAction('refresh_devices', () => gardena.refreshDevices());
 gladys.onAction('stop_all_watering', (fields) => gardena.stopAllWatering(fields.device));
 
+// --- Dashboard widgets -------------------------------------------------------
+// Each widget declared in the `widgets` field of the manifest is registered per
+// key: Gladys pulls its content when a dashboard shows it (ack awaited under
+// 15 s) and relays the taps on its buttons. Building a card reads the live
+// in-memory picture only — it never calls the GARDENA API, so a dashboard left
+// open costs nothing against the weekly quota.
+gladys.onWidgetGet('watering', (options) => gardena.getWidgetContent('watering', options));
+gladys.onWidgetAction('watering', (actionKey, params, options) =>
+  gardena.runWidgetAction('watering', actionKey, params, options),
+);
+gladys.onWidgetGet('mower', (options) => gardena.getWidgetContent('mower', options));
+gladys.onWidgetAction('mower', (actionKey, params, options) =>
+  gardena.runWidgetAction('mower', actionKey, params, options),
+);
+
 // --- Configuration updated by the user ---------------------------------------
 gladys.onConfigUpdated(async (newConfig) => {
   logger.info('onConfigUpdated -> new configuration received');

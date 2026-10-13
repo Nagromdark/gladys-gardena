@@ -42,6 +42,9 @@ GARDENA smart API   ──── GET /v2/locations/{id} ───────▶
   and only for the devices the user created in Gladys.
 - **The state is what GARDENA says**, never what Gladys asked for: a mower that
   came home because of the rain shows as stopped.
+- **Dashboard widgets cost nothing.** The two cards render the in-memory picture
+  the websocket keeps live, so showing them never calls the GARDENA API; only
+  tapping an action button does, at one request per command.
 
 ## Project structure
 
@@ -56,6 +59,12 @@ GARDENA smart API   ──── GET /v2/locations/{id} ───────▶
 │  │  ├─ client.js                   #   OAuth2 + REST + rate limiting
 │  │  ├─ realtime.js                 #   websocket with keep-alive and backoff
 │  │  └─ model.js                    #   JSON:API services -> one object per device
+│  ├─ widgets/                       # the dashboard cards
+│  │  ├─ index.js                    #   registry, action routing, refresh nudger
+│  │  ├─ watering.js                 #   valves, socket and soil sensors
+│  │  ├─ mower.js                    #   mower state and controls
+│  │  ├─ components.js               #   content vocabulary builders + budget
+│  │  └─ labels.js                   #   GARDENA enums -> readable en/fr text
 │  └─ devices/                       # the Gladys mapping, one file per service type
 │     ├─ index.js                    #   registry: features, states, commands
 │     ├─ common.js                   #   battery + signal (every device)

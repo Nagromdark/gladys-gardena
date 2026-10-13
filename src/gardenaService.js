@@ -25,10 +25,17 @@
 import { createLogger, DEVICE_TRANSPORTS } from '@gladysassistant/integration-sdk';
 import { GardenaClient } from './gardena/client.js';
 import { GardenaRealtime } from './gardena/realtime.js';
-import { applyWebsocketMessage, isOnline, parseLocation } from './gardena/model.js';
+import { applyWebsocketMessage, isOnline, parseLocation, servicesOfType } from './gardena/model.js';
 import { buildCommands, buildDevice, buildStates, idsOf, valveSetIds } from './devices/index.js';
-import { CONTROL_TYPES, COMMANDS } from './gardena/constants.js';
+import { minutesToSeconds } from './devices/helpers.js';
+import { CONTROL_TYPES, COMMANDS, SERVICE_TYPES } from './gardena/constants.js';
 import { isConfigured } from './config.js';
+import {
+  WidgetNudger,
+  buildWidgetContent,
+  runWidgetAction,
+  widgetKeysForService,
+} from './widgets/index.js';
 
 const logger = createLogger({ name: 'gardena' });
 
@@ -52,8 +59,10 @@ export class GardenaService {
    * @param {Function} [options.createClient] - Client factory (injected in tests).
    * @param {Function} [options.createRealtime] - Real-time stream factory (injected in tests).
    */
-  constructor(gladys, { createClient, createRealtime } = {}) {
+  constructor(gladys, { createClient, createRealtime, widgetNudgeWindowMs } = {}) {
     this.gladys = gladys;
+    // Dashboards are told to re-pull a card when something really changed.
+    this.widgets = new WidgetNudger(gladys, widgetNudgeWindowMs);
     this.createClient = createClient ?? ((options) => new GardenaClient(options));
     this.createRealtime = createRealtime ?? ((options) => new GardenaRealtime(options));
     this.config = null;
@@ -107,6 +116,9 @@ export class GardenaService {
       await this.publishTransports();
       this.startRealtime();
       await this.reportStatus(true);
+      // Nudges sent while the socket was down were dropped: re-sync the
+      // dashboards that stayed open.
+      this.widgets.nudgeAll();
       logger.info(
         `Connected to GARDENA: ${this.locations.length} location(s), ${this.devices.size} device(s)`,
       );
@@ -120,6 +132,7 @@ export class GardenaService {
   /** Close the real-time streams (configuration change, disconnection, exit). */
   stop() {
     this.started = false;
+    this.widgets.stop();
     for (const stream of this.streams) {
       stream.stop();
     }
@@ -142,8 +155,9 @@ export class GardenaService {
     this.config = config;
     if (!reconnect) {
       // Durations and modes are read at command time, and the refresh interval
-      // at the next poll: nothing published to Gladys depends on them, so there
-      // is nothing to re-publish here.
+      // at the next poll: nothing published to Gladys depends on them. The
+      // widgets do show them, though (the default of a "water for…" form).
+      this.widgets.nudgeAll();
       return;
     }
     logger.info('Credentials or location changed: restarting the GARDENA session');
@@ -225,6 +239,8 @@ export class GardenaService {
     this.devices = devices;
     this.rebuildCommandIndex();
     this.lastRefreshAt = Date.now();
+    // The safety net may have caught what the stream missed.
+    this.widgets.nudgeAll();
     logger.debug(`Picture refreshed: ${this.devices.size} device(s)`);
   }
 
@@ -296,6 +312,11 @@ export class GardenaService {
     this.publishDeviceStates(device).catch((err) =>
       logger.warn(`Publishing a real-time state failed: ${err.message}`),
     );
+    // Bound tiles follow the published states on their own; the computed parts
+    // of a card (activities, contextual buttons) need a re-pull.
+    for (const key of widgetKeysForService(message.type, device)) {
+      this.widgets.nudge(key);
+    }
     this.publishTransports().catch((err) =>
       logger.warn(`Publishing the transports failed: ${err.message}`),
     );
@@ -565,19 +586,12 @@ export class GardenaService {
     if (!device) {
       throw new Error(`Unknown GARDENA device: ${deviceExternalId}`);
     }
-    const setIds = valveSetIds(device);
-    if (setIds.length === 0) {
+    const stopped = await this.stopValveSets([device]);
+    if (stopped === 0) {
       return {
         en: `${device.name} has no valve to stop.`,
         fr: `${device.name} n’a aucune vanne à arrêter.`,
       };
-    }
-    for (const setId of setIds) {
-      await this.client.sendCommand(
-        setId,
-        CONTROL_TYPES.VALVE_SET,
-        COMMANDS.VALVE_SET.STOP_UNTIL_NEXT_TASK,
-      );
     }
     return {
       en: `Watering stopped on ${device.name}.`,
@@ -586,10 +600,190 @@ export class GardenaService {
   }
 
   /**
+   * Close every valve of the given devices, until their next scheduled task.
+   * @param {Array<object>} devices - Normalized GARDENA devices.
+   * @returns {Promise<number>} The number of valve sets stopped.
+   */
+  async stopValveSets(devices) {
+    let stopped = 0;
+    for (const device of devices) {
+      for (const setId of valveSetIds(device)) {
+        await this.client.sendCommand(
+          setId,
+          CONTROL_TYPES.VALVE_SET,
+          COMMANDS.VALVE_SET.STOP_UNTIL_NEXT_TASK,
+        );
+        stopped += 1;
+      }
+    }
+    return stopped;
+  }
+
+  // --- Commands used by the dashboard widgets --------------------------------
+
+  /**
+   * Stop the watering everywhere in the account — the panic button.
+   *
+   * It reads the live picture rather than a device chosen when the card was
+   * rendered: what must stop is whatever is open NOW.
+   * @returns {Promise<object>} A multi-language message for the user.
+   */
+  async stopAllWateringEverywhere() {
+    this.requireConfig();
+    this.requireClient();
+    const devices = [...this.devices.values()].filter((device) => valveSetIds(device).length > 0);
+    const stopped = await this.stopValveSets(devices);
+    if (stopped === 0) {
+      return {
+        en: 'No GARDENA valve to stop on this account.',
+        fr: 'Aucune vanne GARDENA à arrêter sur ce compte.',
+      };
+    }
+    return {
+      en: `Watering stopped on ${devices.length} device(s).`,
+      fr: `Arrosage arrêté sur ${devices.length} appareil(s).`,
+    };
+  }
+
+  /**
+   * Water through one outlet for a number of minutes.
+   * @param {string} serviceId - Id of the VALVE service.
+   * @param {number} minutes - Duration in minutes.
+   * @returns {Promise<object>} A multi-language message for the user.
+   */
+  async startValve(serviceId, minutes) {
+    this.requireConfig();
+    this.requireClient();
+    const service = this.findService(SERVICE_TYPES.VALVE, serviceId);
+    await this.client.sendCommand(
+      service.id,
+      CONTROL_TYPES.VALVE,
+      COMMANDS.VALVE.START_SECONDS_TO_OVERRIDE,
+      { seconds: minutesToSeconds(minutes) },
+    );
+    const name = service.attributes?.name ?? 'the outlet';
+    return {
+      en: `Watering ${name} for ${minutes} min.`,
+      fr: `Arrosage de ${name} pendant ${minutes} min.`,
+    };
+  }
+
+  /**
+   * Send a mower out for a number of minutes, overriding its schedule.
+   * @param {string} serviceId - Id of the MOWER service.
+   * @param {number} minutes - Duration in minutes.
+   * @returns {Promise<object>} A multi-language message for the user.
+   */
+  async mowFor(serviceId, minutes) {
+    this.requireConfig();
+    this.requireClient();
+    const service = this.findService(SERVICE_TYPES.MOWER, serviceId);
+    await this.client.sendCommand(
+      service.id,
+      CONTROL_TYPES.MOWER,
+      COMMANDS.MOWER.START_SECONDS_TO_OVERRIDE,
+      { seconds: minutesToSeconds(minutes) },
+    );
+    return {
+      en: `Mowing for ${minutes} min.`,
+      fr: `Tonte pendant ${minutes} min.`,
+    };
+  }
+
+  /**
+   * Park a mower and cancel its schedule until someone starts it again.
+   * @param {string} serviceId - Id of the MOWER service.
+   * @returns {Promise<object>} A multi-language message for the user.
+   */
+  async parkMower(serviceId) {
+    this.requireConfig();
+    this.requireClient();
+    const service = this.findService(SERVICE_TYPES.MOWER, serviceId);
+    await this.client.sendCommand(
+      service.id,
+      CONTROL_TYPES.MOWER,
+      COMMANDS.MOWER.PARK_UNTIL_FURTHER_NOTICE,
+    );
+    return {
+      en: 'Mower parked until further notice.',
+      fr: 'Tondeuse garée jusqu’à nouvel ordre.',
+    };
+  }
+
+  /**
+   * Find a service of a given type in the live picture.
+   *
+   * The widget echoes back an id IT declared, but the garden may have changed
+   * since: acting on an id nobody recognizes would be worse than refusing.
+   * @param {string} type - Service type.
+   * @param {string} serviceId - Service id.
+   * @returns {object} The service.
+   */
+  findService(type, serviceId) {
+    for (const device of this.devices.values()) {
+      const found = servicesOfType(device, type).find((service) => service.id === serviceId);
+      if (found) {
+        return found;
+      }
+    }
+    throw new Error(`Unknown GARDENA ${type.toLowerCase()}: ${serviceId}`);
+  }
+
+  // --- Dashboard widgets -----------------------------------------------------
+
+  /**
+   * Everything a widget module needs, read from memory: building a card costs
+   * no GARDENA request, whatever the weekly quota left.
+   * @param {object} [options] - `{ settings, language, units }` from the core.
+   * @returns {object} The widget context.
+   */
+  widgetContext({ settings, language, units } = {}) {
+    return {
+      devices: [...this.devices.values()],
+      config: this.config ?? {},
+      settings: settings ?? {},
+      language,
+      units,
+      created: this.createdFeatureIds(),
+      ids: (device) => idsOf(this.gladys, device),
+      configured: Boolean(this.config) && isConfigured(this.config),
+    };
+  }
+
+  /**
+   * Build the content of a dashboard widget.
+   * @param {string} key - Widget key.
+   * @param {object} [options] - `{ settings, language, units }` from the core.
+   * @returns {object} A widget content.
+   */
+  getWidgetContent(key, options) {
+    return buildWidgetContent(key, this.widgetContext(options));
+  }
+
+  /**
+   * Run a widget action (a tap on one of the card buttons).
+   * @param {string} key - Widget key.
+   * @param {string} actionKey - Action key declared in the content.
+   * @param {object} params - Params echoed back by the core.
+   * @param {object} [options] - `{ values }` from the typed form.
+   * @returns {Promise<object>} A multi-language message for the user.
+   */
+  async runWidgetAction(key, actionKey, params, { values } = {}) {
+    logger.info(`onWidgetAction <- ${key}.${actionKey}`);
+    return runWidgetAction(key, actionKey, params, { values, api: this });
+  }
+
+  /**
    * Guard the actions that need a configuration: they are buttons, and a button
    * clicked one second after the container started must say why nothing
    * happened rather than throw a TypeError.
    */
+  requireClient() {
+    if (!this.client) {
+      throw new Error('The integration is not connected to GARDENA yet');
+    }
+  }
+
   requireConfig() {
     if (!this.config || !isConfigured(this.config)) {
       throw new Error('Fill in the GARDENA application key and secret first');

@@ -12,12 +12,31 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { DEFAULT_CONFIG } from '../src/config.js';
+import { WIDGET_KEYS } from '../src/widgets/index.js';
 
 const manifest = JSON.parse(
   await readFile(new URL('../gladys-assistant-integration.json', import.meta.url), 'utf8'),
 );
 
 const indexSource = await readFile(new URL('../index.js', import.meta.url), 'utf8');
+
+/** Minimum version of the `gladys_version` range, e.g. [5, 1, 0]. */
+function minGladysVersion() {
+  const [, major, minor, patch] = /^>=(\d+)\.(\d+)\.(\d+)/.exec(manifest.gladys_version) ?? [];
+  assert.ok(major !== undefined, `unsupported gladys_version: ${manifest.gladys_version}`);
+  return [Number(major), Number(minor), Number(patch)];
+}
+
+/** Is the version at least the floor? */
+function atLeast([major, minor, patch], [minMajor, minMinor, minPatch]) {
+  if (major !== minMajor) {
+    return major > minMajor;
+  }
+  if (minor !== minMinor) {
+    return minor > minMinor;
+  }
+  return patch >= minPatch;
+}
 
 test('the manifest describes a device integration talking to a cloud API', () => {
   assert.equal(manifest.manifest_version, 1);
@@ -64,7 +83,15 @@ test('the catalog categories are valid and require a Gladys that knows them', ()
   }
   // Older cores reject unknown top-level manifest fields: declaring categories
   // without raising the range turns the catalog filter into an install failure.
-  assert.match(manifest.gladys_version, /^>=4\.(8[6-9]|9\d)\./, 'categories require >=4.86.0');
+  assert.ok(atLeast(minGladysVersion(), [4, 86, 0]), 'categories require >=4.86.0');
+});
+
+test('declaring widgets requires a Gladys that knows them', () => {
+  // Same rule as `categories`, one floor higher: a core older than 5.1 rejects
+  // the whole manifest on the unknown `widgets` field.
+  if (manifest.widgets) {
+    assert.ok(atLeast(minGladysVersion(), [5, 1, 0]), 'widgets require >=5.1.0');
+  }
 });
 
 test('every manifest action is registered in index.js', () => {
@@ -161,6 +188,68 @@ test('every user-visible label is translated in both project languages', () => {
     assert.ok(field.label.fr, `${field.key} needs a French label`);
     if (field.description) {
       assert.ok(field.description.en && field.description.fr, `${field.key} description`);
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Dashboard widgets. A widget key is stored in the users' dashboards, exactly
+// like an external id: the manifest and the code must never drift apart.
+// ---------------------------------------------------------------------------
+
+test('the declared widgets are the ones the code implements', () => {
+  const declared = manifest.widgets.map((widget) => widget.key);
+  assert.ok(declared.length >= 1 && declared.length <= 5, '1 to 5 widgets');
+  assert.equal(new Set(declared).size, declared.length, 'no duplicate key');
+  assert.deepEqual(declared.slice().sort(), WIDGET_KEYS.slice().sort());
+  for (const key of declared) {
+    assert.match(key, /^[a-z0-9_]{2,32}$/, `invalid widget key "${key}"`);
+    assert.match(indexSource, new RegExp(`onWidgetGet\\('${key}'`), `${key}: no content handler`);
+    assert.match(indexSource, new RegExp(`onWidgetAction\\('${key}'`), `${key}: no action handler`);
+  }
+});
+
+test('widget labels and descriptions fit what the card can display', () => {
+  for (const widget of manifest.widgets) {
+    for (const language of ['en', 'fr']) {
+      const label = widget.label[language];
+      assert.ok(label, `${widget.key}: missing ${language} label`);
+      // Code-enforced bounds, not in the JSON schema: French overflows easily.
+      assert.ok(
+        label.length >= 3 && label.length <= 30,
+        `${widget.key}: ${language} label is ${label.length} characters`,
+      );
+      const description = widget.description?.[language];
+      assert.ok(description, `${widget.key}: missing ${language} description`);
+      assert.ok(description.length <= 100, `${widget.key}: ${language} description too long`);
+    }
+    if (widget.icon !== undefined) {
+      assert.match(widget.icon, /^[a-z0-9-]{1,40}$/);
+    }
+    if (widget.action_timeout_seconds !== undefined) {
+      assert.ok(widget.action_timeout_seconds >= 5 && widget.action_timeout_seconds <= 120);
+    }
+  }
+});
+
+test('widget settings never carry a secret and are not integration config', () => {
+  // They live in the dashboard JSON, readable by every viewer of a public
+  // dashboard — and they are per-instance, not integration-wide settings.
+  const allowed = ['string', 'number', 'boolean', 'select', 'multi_select', 'section'];
+  for (const widget of manifest.widgets) {
+    const settings = widget.settings ?? [];
+    assert.ok(settings.length <= 10, `${widget.key}: too many settings`);
+    for (const field of settings) {
+      assert.ok(allowed.includes(field.type), `${widget.key}.${field.key}: forbidden type`);
+      assert.ok(
+        !(field.key in DEFAULT_CONFIG),
+        `${widget.key}.${field.key} is a dashboard setting, not an integration config key`,
+      );
+      assert.ok(field.label.en && field.label.fr, `${widget.key}.${field.key}: untranslated`);
+      if (field.source !== undefined) {
+        assert.equal(field.source, 'devices');
+        assert.equal(field.options, undefined, 'source and options together reject the manifest');
+      }
     }
   }
 });

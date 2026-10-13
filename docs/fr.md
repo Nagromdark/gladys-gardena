@@ -91,6 +91,38 @@ répond depuis l'image qu'elle a déjà en mémoire, et ne relit l'API GARDENA q
 lorsque cette image dépasse l'âge du réglage **Relecture de l'API GARDENA**.
 Quel que soit le nombre d'appareils du jardin, une relecture coûte un appel.
 
+## Widgets du tableau de bord
+
+Deux cartes peuvent être ajoutées à n'importe quel tableau de bord Gladys,
+depuis le sélecteur de blocs.
+
+**Arrosage GARDENA** affiche une ligne par sortie d'eau et pour la prise — ce
+qui est ouvert en ce moment, en clair — avec des tuiles d'humidité du sol, un
+bouton **Arrêter l'arrosage** qui ferme toutes les vannes du compte d'un coup,
+un formulaire **Arroser…** pour ouvrir une sortie pendant une durée choisie, et
+un bouton pour allumer ou éteindre la prise.
+
+**Tondeuse GARDENA** affiche l'activité, l'état et la dernière erreur de la
+tondeuse, sa batterie et ses heures de tonte, avec **Tondre** / **Rentrer**, un
+formulaire **Tondre…**, et **Garer, sans calendrier** (qui demande une
+confirmation, puisqu'il annule le calendrier jusqu'à ce que vous la relanciez).
+
+Chaque carte a un réglage optionnel : quel capteur alimente les tuiles, et
+quelle tondeuse les boutons pilotent. Laissez-les vides si votre jardin n'en a
+qu'un — ils existent pour les jardins qui en ont plusieurs, où agir sur « le
+premier » serait une devinette. Posez deux cartes d'arrosage, chacune liée à un
+capteur, et vous obtenez un jeu de tuiles par zone.
+
+**Afficher un widget n'appelle jamais l'API GARDENA.** Les cartes se contentent
+de l'image que le flux temps réel garde déjà en mémoire : un tableau de bord
+laissé ouvert toute la journée ne coûte rien à votre quota hebdomadaire. Seul un
+appui sur un bouton d'action envoie une requête — une par commande, exactement
+comme un interrupteur sur une page d'appareil.
+
+Les tuiles liées à un capteur se mettent à jour seules, en direct. Le reste de
+la carte est rechargé quand quelque chose change vraiment, au plus une fois
+toutes les dix secondes.
+
 ## Rester dans le quota de requêtes GARDENA
 
 GARDENA accorde un **nombre limité de requêtes API par semaine** à une
@@ -162,6 +194,16 @@ temps réel vous donne déjà les changements.
 **Aucun appareil dans l'onglet Découvrir** — vérifiez que vos appareils
 apparaissent bien dans l'application GARDENA, et que le filtre d'emplacement (si
 vous en avez mis un) correspond au bon jardin.
+
+**Un widget affiche « Connexion à votre compte GARDENA… »** — l'intégration
+démarre ou se reconnecte. Si cela persiste, utilisez **Tester la connexion**
+dans la configuration : la carte signale simplement que le jardin n'est pas
+encore chargé.
+
+**Un widget affiche les valeurs mais aucun bouton marche/arrêt** — les boutons
+qui agissent sur un appareil n'apparaissent qu'une fois cet appareil créé dans
+Gladys, depuis l'onglet **Découvrir**. Les boutons **Arrêter l'arrosage**,
+**Arroser…** et **Tondre…** n'en ont pas besoin.
 
 ---
 
