@@ -12,7 +12,9 @@ import {
   DEVICE_FEATURE_CATEGORIES,
   DEVICE_FEATURE_TYPES,
   DEVICE_FEATURE_UNITS,
+  DEVICE_POLL_FREQUENCIES,
 } from '@gladysassistant/integration-sdk';
+import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
 import { buildCommands, buildDevice, buildStates, valveSetIds } from '../src/devices/index.js';
 import { isMowing } from '../src/devices/mower.js';
 import { isWatering } from '../src/devices/valve.js';
@@ -20,7 +22,6 @@ import { isPowered } from '../src/devices/powerSocket.js';
 import { minutesToSeconds } from '../src/devices/helpers.js';
 import { parseLocation } from '../src/gardena/model.js';
 import { DEFAULT_CONFIG } from '../src/config.js';
-import { createFakeGladys } from './helpers/fakeGladys.js';
 import {
   IRRIGATION_CONTROL_ID,
   MOWER_ID,
@@ -50,7 +51,7 @@ test('a device is published with the GARDENA name, the poll frequency and its id
   const device = buildDevice(gladys, devices.get(MOWER_ID));
 
   assert.equal(device.name, 'SILENO');
-  assert.equal(device.external_id, `ext:test:gardena:${MOWER_ID}`);
+  assert.equal(device.external_id, gladys.externalIds('gardena', MOWER_ID).device);
   assert.deepEqual(
     device.params.find((param) => param.name === 'GARDENA_MODEL'),
     { name: 'GARDENA_MODEL', value: 'GARDENA smart Mower' },
@@ -237,22 +238,24 @@ test('a duration in minutes becomes the seconds GARDENA expects, and stays sane'
 // ---------------------------------------------------------------------------
 // The publication contract enforced by the Gladys core. These values are NOT
 // free-form, and the core rejects the whole batch when one field is off:
-//   - `poll_frequency` is an enum in MILLISECONDS (DEVICE_POLL_FREQUENCIES in
-//     server/utils/constants.js), not a number of seconds — anything else is
-//     "invalid poll frequency" at publication time;
+//   - `poll_frequency` is an enum in MILLISECONDS (DEVICE_POLL_FREQUENCIES),
+//     not a number of seconds — anything else is "invalid poll frequency" at
+//     publication time;
+//   - `should_poll: true` is what actually arms the polling: without it the
+//     device is accepted, and simply never polled;
 //   - `min` and `max` are NOT NULL on every feature (t_device_feature model),
 //     including binary switches and text sensors — a missing one is only
 //     rejected later, when the user creates the device.
-// Both were real bugs; this test is what keeps them fixed.
+// All three were real bugs; these tests are what keep them fixed.
 // ---------------------------------------------------------------------------
-const GLADYS_POLL_FREQUENCIES_MS = [1000, 2000, 10000, 15000, 30000, 60000];
 
 test('every published device satisfies the Gladys core publication contract', () => {
   for (const gardenaDevice of devices.values()) {
     const device = buildDevice(gladys, gardenaDevice);
 
+    assert.equal(device.should_poll, true, `${device.name}: without should_poll, never polled`);
     assert.ok(
-      GLADYS_POLL_FREQUENCIES_MS.includes(device.poll_frequency),
+      Object.values(DEVICE_POLL_FREQUENCIES).includes(device.poll_frequency),
       `${device.name}: poll_frequency ${device.poll_frequency} is not a Gladys poll frequency`,
     );
     assert.ok(device.features.length > 0, `${device.name}: no feature`);
@@ -314,6 +317,24 @@ test('every feature uses a category/type pair the Gladys UI knows how to render'
       );
     }
   }
+});
+
+test('Gladys accepts the real discovery payload', async () => {
+  // The SDK fake is a real GladysIntegration over an in-memory Gladys that
+  // checks the payload like the host API: external_id prefix, known
+  // category/type/unit, poll_frequency... A refusal is a 400 for the WHOLE
+  // list, so not a single GARDENA device would show up in the Discovery tab.
+  const fresh = createFakeGladys();
+  const payload = [...devices.values()].map((device) => buildDevice(fresh, device));
+
+  await fresh.publishDiscoveredDevices(payload);
+
+  assert.equal(fresh.fake.discoveredDevices.length, devices.size);
+  assert.equal(
+    fresh.fake.requests.filter((request) => request.status !== 200).length,
+    0,
+    'the host API rejected nothing',
+  );
 });
 
 test('device params never use the GLADYS_ prefix, reserved by the core', () => {

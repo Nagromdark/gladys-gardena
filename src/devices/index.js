@@ -14,6 +14,7 @@
 //                                    command each one maps to.
 // -----------------------------------------------------------------------------
 
+import { DEVICE_POLL_FREQUENCIES } from '@gladysassistant/integration-sdk';
 import { SERVICE_TYPES } from '../gardena/constants.js';
 import { servicesOfType } from '../gardena/model.js';
 import { buildCommonFeatures, buildCommonStates } from './common.js';
@@ -26,17 +27,21 @@ import { valve } from './valve.js';
 // string would orphan every device already created by the users.
 export const DEVICE_TYPE = 'gardena';
 
-// Gladys' `poll_frequency` is NOT a free number of seconds: it is an enum of
-// six values in MILLISECONDS (1 s, 2 s, 10 s, 15 s, 30 s, 60 s — see
-// DEVICE_POLL_FREQUENCIES in the Gladys core), and anything else is rejected
-// with "invalid poll frequency". One minute is the slowest it offers, so it is
-// the only sensible choice for a rate-limited cloud API.
+// Gladys polls a device only when it is published with BOTH `should_poll: true`
+// and a `poll_frequency` — a device missing the flag is simply never polled,
+// silently (see device.add.js in the core). And `poll_frequency` is NOT a free
+// number of seconds: it is an enum in MILLISECONDS (1 s, 2 s, 10 s, 15 s, 30 s,
+// 60 s — DEVICE_POLL_FREQUENCIES), anything else being rejected with "invalid
+// poll frequency". One minute is the slowest Gladys offers.
 //
 // That is NOT the rate at which GARDENA is called: `onPoll` answers from the
 // shared in-memory picture, and only re-reads the GARDENA API when it is older
 // than the user's `poll_frequency` configuration (in seconds). Gladys ticks
-// every minute, GARDENA is read every 15 minutes by default.
-export const GLADYS_POLL_FREQUENCY_MS = 60 * 1000;
+// every minute, GARDENA is read every hour by default.
+//
+// Both fields are read when the user CREATES the device: changing them in a
+// later publication does not affect a device already created.
+export const GLADYS_POLL_FREQUENCY_MS = DEVICE_POLL_FREQUENCIES.EVERY_MINUTES;
 
 export const SERVICE_MODULES = [mower, valve, powerSocket, sensor];
 
@@ -68,8 +73,10 @@ export function buildDevice(gladys, device) {
     name: device.name,
     external_id: ids.device,
     // The websocket carries the real-time changes; polling is the safety net
-    // for a missed message or a websocket the network keeps cutting. The
-    // GARDENA API is not hit at this rate — see GLADYS_POLL_FREQUENCY_MS.
+    // for a missed message or a websocket the network keeps cutting. Without
+    // `should_poll`, Gladys never calls onPoll and that safety net never arms.
+    // The GARDENA API is not hit at this rate — see GLADYS_POLL_FREQUENCY_MS.
+    should_poll: true,
     poll_frequency: GLADYS_POLL_FREQUENCY_MS,
     features,
     params: buildParams(device),

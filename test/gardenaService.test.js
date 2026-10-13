@@ -13,7 +13,8 @@ import { GardenaService } from '../src/gardenaService.js';
 import { buildDevice } from '../src/devices/index.js';
 import { parseLocation } from '../src/gardena/model.js';
 import { normalizeConfig } from '../src/config.js';
-import { asCreatedDevice, createFakeGladys } from './helpers/fakeGladys.js';
+import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
+import { asCreatedDevice } from './helpers/createdDevices.js';
 import {
   IRRIGATION_CONTROL_ID,
   LOCATION_ID,
@@ -70,7 +71,7 @@ function createFakeRealtime(streams) {
  * A service wired to the fixture, with every device already created in Gladys
  * (which is what the user does after the discovery screen).
  */
-function createService({ createdDevices = 'all' } = {}) {
+async function createService({ createdDevices = 'all' } = {}) {
   const parsed = parseLocation(buildLocationPayload(), 'My Garden');
   const reference = createFakeGladys();
   const discovered = [...parsed.values()].map((device) => buildDevice(reference, device));
@@ -79,6 +80,9 @@ function createService({ createdDevices = 'all' } = {}) {
       ? discovered.map(asCreatedDevice)
       : createdDevices.map(asCreatedDevice);
   const gladys = createFakeGladys({ devices });
+  // A real GladysIntegration: `gladys.devices` is served by the in-memory
+  // Gladys and loaded on connection, like in production.
+  await gladys.connect();
   const client = createFakeClient();
   const streams = [];
   const service = new GardenaService(gladys, {
@@ -89,18 +93,23 @@ function createService({ createdDevices = 'all' } = {}) {
 }
 
 function publishedFor(gladys, suffix) {
-  return gladys.published.filter((entry) => entry.featureExternalId.endsWith(suffix));
+  return gladys.fake.states.filter((entry) => entry.device_feature_external_id.endsWith(suffix));
+}
+
+/** How many times the integration published its discovery list. */
+function discoveryCount(gladys) {
+  return gladys.fake.requests.filter((request) => request.path === '/discovered_device').length;
 }
 
 test('starting publishes the devices, their states, their transports and the status', async () => {
-  const { service, gladys, client, streams } = createService();
+  const { service, gladys, client, streams } = await createService();
 
   await service.start(CONFIG);
 
-  assert.equal(gladys.discovered.length, 1);
-  assert.equal(gladys.discovered[0].length, 5, 'the five GARDENA devices');
+  assert.equal(discoveryCount(gladys), 1);
+  assert.equal(gladys.fake.discoveredDevices.length, 5, 'the five GARDENA devices');
   assert.equal(client.locationCalls, 1);
-  assert.deepEqual(gladys.connectionStatuses.at(-1), { connected: true, message: undefined });
+  assert.equal(gladys.fake.connectionStatus.connected, true);
 
   // One websocket per location, opened.
   assert.equal(streams.length, 1);
@@ -112,56 +121,56 @@ test('starting publishes the devices, their states, their transports and the sta
 });
 
 test('an unconfigured integration reports why instead of hammering the API', async () => {
-  const { service, gladys, streams } = createService();
+  const { service, gladys, streams } = await createService();
 
   await service.start(normalizeConfig({}));
 
-  assert.equal(gladys.connectionStatuses.at(-1).connected, false);
-  assert.match(gladys.connectionStatuses.at(-1).message.en, /application key/);
+  assert.equal(gladys.fake.connectionStatus.connected, false);
+  assert.match(gladys.fake.connectionStatus.message.en, /application key/);
   assert.equal(streams.length, 0);
-  assert.equal(gladys.discovered.length, 0);
+  assert.equal(discoveryCount(gladys), 0);
 });
 
 test('states are published only for the devices the user created', async () => {
   const parsed = parseLocation(buildLocationPayload());
   const reference = createFakeGladys();
   const onlyMower = buildDevice(reference, parsed.get(MOWER_ID));
-  const { service, gladys } = createService({ createdDevices: [onlyMower] });
+  const { service, gladys } = await createService({ createdDevices: [onlyMower] });
 
   await service.start(CONFIG);
 
-  assert.ok(gladys.published.length > 0);
+  assert.ok(gladys.fake.states.length > 0);
   assert.equal(
-    gladys.published.every((entry) => entry.featureExternalId.includes(MOWER_ID)),
+    gladys.fake.states.every((entry) => entry.device_feature_external_id.includes(MOWER_ID)),
     true,
     'nothing is published for a device that exists in the garden but not in Gladys',
   );
 });
 
 test('publishing twice sends nothing the second time', async () => {
-  const { service, gladys } = createService();
+  const { service, gladys } = await createService();
 
   await service.start(CONFIG);
-  const afterStart = gladys.published.length;
+  const afterStart = gladys.fake.states.length;
   await service.publishAllStates();
 
-  assert.equal(gladys.published.length, afterStart, 'unchanged values are not re-published');
+  assert.equal(gladys.fake.states.length, afterStart, 'unchanged values are not re-published');
 });
 
 test('a device created in Gladys gets a full snapshot, not only the deltas', async () => {
-  const { service, gladys } = createService();
+  const { service, gladys } = await createService();
   await service.start(CONFIG);
-  const afterStart = gladys.published.length;
+  const afterStart = gladys.fake.states.length;
 
   // What onDeviceCreated triggers: the new device has no state yet, and its
   // GARDENA values did not change, so the delta cache must be bypassed.
   await service.publishSnapshot();
 
-  assert.equal(gladys.published.length, afterStart * 2);
+  assert.equal(gladys.fake.states.length, afterStart * 2);
 });
 
 test('the actions refuse to run before the credentials are filled in', async () => {
-  const { service } = createService();
+  const { service } = await createService();
   await service.start(normalizeConfig({}));
 
   await assert.rejects(() => service.testConnection(), /application key/);
@@ -169,9 +178,9 @@ test('the actions refuse to run before the credentials are filled in', async () 
 });
 
 test('a real-time message publishes only what changed', async () => {
-  const { service, gladys, streams } = createService();
+  const { service, gladys, streams } = await createService();
   await service.start(CONFIG);
-  const before = gladys.published.length;
+  const before = gladys.fake.states.length;
 
   streams[0].onMessage({
     id: MOWER_ID,
@@ -181,9 +190,9 @@ test('a real-time message publishes only what changed', async () => {
   await Promise.resolve();
   await Promise.resolve();
 
-  const published = gladys.published.slice(before);
+  const published = gladys.fake.states.slice(before);
   assert.deepEqual(
-    published.map((entry) => entry.featureExternalId.split(':').pop()).sort(),
+    published.map((entry) => entry.device_feature_external_id.split(':').pop()).sort(),
     ['mower-0-activity', 'mower-0-on-off'],
     'the switch follows the activity, the untouched features stay quiet',
   );
@@ -191,27 +200,29 @@ test('a real-time message publishes only what changed', async () => {
 });
 
 test('a device that fell off the radio link is flagged unreachable and degraded', async () => {
-  const { service, gladys } = createService();
+  const { service, gladys } = await createService();
 
   await service.start(CONFIG);
 
-  const socket = gladys.transports.find((entry) => entry.external_id.endsWith(POWER_SOCKET_ID));
+  const socket = gladys.fake.transports.find((entry) =>
+    entry.device_external_id.endsWith(POWER_SOCKET_ID),
+  );
   assert.equal(socket.transport, 'unreachable');
   assert.equal(socket.degraded, true);
   assert.match(socket.message.en, /radio link/);
 
-  const mower = gladys.transports.find((entry) => entry.external_id.endsWith(MOWER_ID));
+  const mower = gladys.fake.transports.find((entry) => entry.device_external_id.endsWith(MOWER_ID));
   assert.equal(mower.transport, 'cloud');
   assert.equal(mower.degraded, undefined);
 
   // Unchanged transports are not re-published on every message.
-  const count = gladys.transports.length;
+  const count = gladys.fake.transports.length;
   await service.publishTransports();
-  assert.equal(gladys.transports.length, count);
+  assert.equal(gladys.fake.transports.length, count);
 });
 
 test('switching a feature on sends the GARDENA command of the right service', async () => {
-  const { service, client, discovered } = createService();
+  const { service, client, discovered } = await createService();
   await service.start(CONFIG);
 
   const irrigation = discovered.find((device) =>
@@ -232,7 +243,7 @@ test('switching a feature on sends the GARDENA command of the right service', as
 });
 
 test('a command on an unknown feature refreshes once, then fails explicitly', async () => {
-  const { service, client } = createService();
+  const { service, client } = await createService();
   await service.start(CONFIG);
   const callsBefore = client.locationCalls;
 
@@ -244,7 +255,7 @@ test('a command on an unknown feature refreshes once, then fails explicitly', as
 });
 
 test('stopping all watering targets the valve set of the chosen device', async () => {
-  const { service, client, discovered } = createService();
+  const { service, client, discovered } = await createService();
   await service.start(CONFIG);
 
   const waterControl = discovered.find((device) => device.external_id.endsWith(WATER_CONTROL_ID));
@@ -265,7 +276,7 @@ test('stopping all watering targets the valve set of the chosen device', async (
 });
 
 test('polling several devices costs a single API call', async () => {
-  const { service, client, discovered } = createService();
+  const { service, client, discovered } = await createService();
   await service.start(CONFIG);
   const callsAfterStart = client.locationCalls;
 
@@ -284,7 +295,7 @@ test('polling several devices costs a single API call', async () => {
 const WEEK_SECONDS = 7 * 24 * 3600;
 
 test('the refresh interval is honoured exactly, so the weekly cost is predictable', async () => {
-  const { service, client } = createService();
+  const { service, client } = await createService();
   await service.start(CONFIG);
   const callsAfterStart = client.locationCalls;
 
@@ -308,7 +319,7 @@ test('the refresh interval is honoured exactly, so the weekly cost is predictabl
 test('a websocket reconnection does not force a read, it follows the same interval', async () => {
   // GARDENA closes the stream every ~2 hours by design: a forced read on every
   // reconnection would silently add ~84 calls a week, on top of the refreshes.
-  const { service, client, streams } = createService();
+  const { service, client, streams } = await createService();
   await service.start(CONFIG);
   const callsAfterStart = client.locationCalls;
 
@@ -320,7 +331,7 @@ test('a websocket reconnection does not force a read, it follows the same interv
 });
 
 test('a 429 suspends the REST refreshes instead of insisting', async () => {
-  const { service, client } = createService();
+  const { service, client } = await createService();
   await service.start(CONFIG);
 
   const throttled = new Error('Too Many Requests');
@@ -340,12 +351,12 @@ test('a 429 suspends the REST refreshes instead of insisting', async () => {
 });
 
 test('changing the credentials restarts the session, changing a duration does not', async () => {
-  const { service, gladys, streams } = createService();
+  const { service, gladys, streams } = await createService();
   await service.start(CONFIG);
 
   await service.applyConfig({ ...CONFIG, default_duration: 45 }, false);
   assert.equal(streams.length, 1, 'no new stream');
-  assert.equal(gladys.discovered.length, 1, 'nothing published depends on a duration');
+  assert.equal(discoveryCount(gladys), 1, 'nothing published depends on a duration');
   assert.equal(service.config.default_duration, 45, 'the next command will use the new duration');
 
   await service.applyConfig({ ...CONFIG, application_key: 'other-key' }, true);
@@ -354,7 +365,7 @@ test('changing the credentials restarts the session, changing a duration does no
 });
 
 test('a failing GARDENA API is reported in the Configuration screen', async () => {
-  const { service, gladys } = createService();
+  const { service, gladys } = await createService();
   service.createClient = () => ({
     async getLocations() {
       const error = new Error('Forbidden');
@@ -365,13 +376,13 @@ test('a failing GARDENA API is reported in the Configuration screen', async () =
 
   await assert.rejects(() => service.start(CONFIG));
 
-  const status = gladys.connectionStatuses.at(-1);
+  const status = gladys.fake.connectionStatus;
   assert.equal(status.connected, false);
   assert.match(status.message.en, /refused the credentials/);
 });
 
 test('stopping closes every real-time stream', async () => {
-  const { service, streams } = createService();
+  const { service, streams } = await createService();
   await service.start(CONFIG);
 
   service.stop();
