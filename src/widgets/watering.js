@@ -17,6 +17,7 @@ import { featureId } from '../devices/helpers.js';
 import { isWatering } from '../devices/valve.js';
 import { isPowered } from '../devices/powerSocket.js';
 import {
+  WIDGET_BUDGET,
   actionButton,
   chart,
   clip,
@@ -51,10 +52,11 @@ const TILE_PRIORITY = [
   { attribute: 'ambientTemperature', fr: 'Température ambiante', icon: 'thermometer' },
   { attribute: 'lightIntensity', fr: 'Luminosité', icon: 'sun' },
 ];
+// Tiles are the flexible part of the card: everything else earns its slot
+// (the emergency button, what is running, the curve, the forms, the offline
+// warning). So they take whatever room is left rather than a fixed share — a
+// blanket cap would drop a sensor on a small garden that had plenty of space.
 const MAX_TILES = 3;
-// With the curve on the card, a third tile of the same metric is redundant —
-// and the room is better spent on the offline warning.
-const MAX_TILES_WITH_CHART = 2;
 const MAX_STATUS_ROWS = 10;
 
 /** Devices carrying at least one valve or power socket. */
@@ -236,12 +238,16 @@ export const wateringWidget = {
       });
     }
 
-    const components = [];
+    // Everything that is not a tile, built first: the tiles then take the slots
+    // that are actually left. `head` comes before them in content order and
+    // `tail` after, which is what decides who survives a budget overflow.
+    const head = [];
+    const tail = [];
 
     // The emergency button first: if anything ever overflows the budget, the
     // one that stops a flood is the one that must survive.
     if (watering.some((device) => servicesOfType(device, SERVICE_TYPES.VALVE).length > 0)) {
-      components.push(
+      head.push(
         actionButton({
           label: { en: 'Stop watering', fr: "Arrêter l'arrosage" },
           actionKey: WATERING_ACTIONS.STOP_WATERING,
@@ -253,24 +259,15 @@ export const wateringWidget = {
 
     const rows = buildStatusRows({ devices: watering });
     if (rows.length > 0) {
-      components.push(status(rows));
+      head.push(status(rows));
     }
 
     // The focal slot: how the soil dried over the week. Bound to the published
     // features, so the core draws from the history it already keeps — nothing
     // to compute, nothing to store, and more than the picture holds in memory.
     const humidityFeatures = soilHumidityFeatures({ sensors, ids, created });
-    components.push(
-      ...buildTiles({
-        sensors,
-        ids,
-        created,
-        maxTiles: humidityFeatures.length > 0 ? MAX_TILES_WITH_CHART : MAX_TILES,
-      }),
-    );
-
     if (humidityFeatures.length > 0) {
-      components.push(
+      tail.push(
         chart({
           title: { en: 'Soil humidity', fr: 'Humidité du sol' },
           deviceFeatures: humidityFeatures,
@@ -283,7 +280,7 @@ export const wateringWidget = {
 
     const options = wateringOptions(watering);
     if (options.length > 0) {
-      components.push(
+      tail.push(
         actionButton({
           label: { en: 'Water for…', fr: 'Arroser…' },
           actionKey: WATERING_ACTIONS.START_WATERING,
@@ -321,7 +318,7 @@ export const wateringWidget = {
       const externalId = featureId(ids(socketDevice), service, 'on-off');
       if (created && created.has(externalId)) {
         const powered = isPowered(service.attributes?.activity) === true;
-        components.push(
+        tail.push(
           featureButton({
             label: powered
               ? { en: 'Switch the socket off', fr: 'Éteindre la prise' }
@@ -337,7 +334,7 @@ export const wateringWidget = {
 
     const offline = devices.filter((device) => !isOnline(device));
     if (offline.length > 0) {
-      components.push(
+      tail.push(
         text(
           {
             en: `${offline.length} device(s) offline: the GARDENA gateway does not see them.`,
@@ -348,6 +345,14 @@ export const wateringWidget = {
       );
     }
 
-    return { ttl_seconds: 60, components: withinBudget(components) };
+    const room = WIDGET_BUDGET.components - head.length - tail.length;
+    const tiles = buildTiles({
+      sensors,
+      ids,
+      created,
+      maxTiles: Math.min(MAX_TILES, Math.max(room, 0)),
+    });
+
+    return { ttl_seconds: 60, components: withinBudget([...head, ...tiles, ...tail]) };
   },
 };

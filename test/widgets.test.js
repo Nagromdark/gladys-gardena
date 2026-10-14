@@ -324,8 +324,41 @@ test('the card draws the soil humidity of the week, bound to the history', () =>
   for (const feature of curve.device_features) {
     assert.match(feature, /soil-humidity$/);
   }
-  // With the curve on the card, the tiles make room for the offline warning.
-  assert.ok(countByType(content, 'value') <= 2);
+  // On a crowded garden the tiles give up their slots to what earns them: the
+  // emergency button, what is running, the curve, the forms, the warning.
+  assert.equal(content.components.length, 8, 'the fixture garden fills the card');
+  assert.equal(countByType(content, 'value'), 2);
+  assert.ok(
+    content.components.some(
+      (component) => component.type === 'text' && component.variant === 'caption',
+    ),
+    'the offline warning survives: it matters more than a third tile',
+  );
+});
+
+test('a small garden keeps a tile per sensor', () => {
+  // The tiles take the room that is LEFT, they do not pay a fixed toll: a
+  // garden with space must not lose a sensor to a blanket cap.
+  const parsed = [...parseLocation(buildLocationPayload()).values()];
+  const sensor = parsed.find((device) => device.id === SENSOR_ID);
+  const sensors = ['a', 'b', 'c'].map((suffix) => ({
+    ...sensor,
+    id: `${SENSOR_ID}-${suffix}`,
+    name: `Sensor ${suffix}`,
+    services: {
+      SENSOR: sensor.services.SENSOR.map((service) => ({
+        ...service,
+        id: `${SENSOR_ID}-${suffix}`,
+      })),
+    },
+  }));
+
+  const content = buildWidgetContent('watering', createContext({ devices: sensors }));
+
+  assert.deepEqual(validateWidgetContent(content), []);
+  assert.equal(countByType(content, 'value'), 3, 'three sensors, three tiles');
+  assert.equal(countByType(content, 'chart'), 1, 'and the curve too');
+  assert.ok(content.components.length <= 8);
 });
 
 test('no chart without a created feature to draw from', () => {
