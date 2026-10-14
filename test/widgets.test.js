@@ -58,6 +58,23 @@ function createContext({ devices, created = 'all', settings = {}, configured = t
   return { devices: parsed, config: CONFIG, settings, created: createdIds, ids, configured };
 }
 
+/** A garden of three soil sensors, named and ordered a, b, c. */
+function threeSensors() {
+  const parsed = [...parseLocation(buildLocationPayload()).values()];
+  const sensor = parsed.find((device) => device.id === SENSOR_ID);
+  return ['a', 'b', 'c'].map((suffix) => ({
+    ...sensor,
+    id: `${SENSOR_ID}-sensor-${suffix}`,
+    name: `Sensor ${suffix}`,
+    services: {
+      SENSOR: sensor.services.SENSOR.map((service) => ({
+        ...service,
+        id: `${SENSOR_ID}-sensor-${suffix}`,
+      })),
+    },
+  }));
+}
+
 /** Every `device_feature` referenced anywhere in a content. */
 function boundFeatures(content) {
   const found = [];
@@ -320,10 +337,8 @@ test('the card draws the soil humidity of the week, bound to the history', () =>
   assert.ok(curve, 'the focal slot carries the drying curve');
   assert.equal(curve.interval, 'last-week');
   assert.equal(curve.unit, '%');
-  assert.ok(curve.device_features.length >= 1 && curve.device_features.length <= 4);
-  for (const feature of curve.device_features) {
-    assert.match(feature, /soil-humidity$/);
-  }
+  assert.equal(curve.device_features.length, 1, 'one sensor, one named curve');
+  assert.match(curve.device_features[0], /soil-humidity$/);
   // On a crowded garden the tiles give up their slots to what earns them: the
   // emergency button, what is running, the curve, the forms, the warning.
   assert.equal(content.components.length, 8, 'the fixture garden fills the card');
@@ -339,26 +354,41 @@ test('the card draws the soil humidity of the week, bound to the history', () =>
 test('a small garden keeps a tile per sensor', () => {
   // The tiles take the room that is LEFT, they do not pay a fixed toll: a
   // garden with space must not lose a sensor to a blanket cap.
-  const parsed = [...parseLocation(buildLocationPayload()).values()];
-  const sensor = parsed.find((device) => device.id === SENSOR_ID);
-  const sensors = ['a', 'b', 'c'].map((suffix) => ({
-    ...sensor,
-    id: `${SENSOR_ID}-${suffix}`,
-    name: `Sensor ${suffix}`,
-    services: {
-      SENSOR: sensor.services.SENSOR.map((service) => ({
-        ...service,
-        id: `${SENSOR_ID}-${suffix}`,
-      })),
-    },
-  }));
-
-  const content = buildWidgetContent('watering', createContext({ devices: sensors }));
+  const content = buildWidgetContent('watering', createContext({ devices: threeSensors() }));
 
   assert.deepEqual(validateWidgetContent(content), []);
   assert.equal(countByType(content, 'value'), 3, 'three sensors, three tiles');
   assert.equal(countByType(content, 'chart'), 1, 'and the curve too');
   assert.ok(content.components.length <= 8);
+});
+
+test('the curve names the sensor it draws, since the legend cannot', () => {
+  // Gladys names a widget chart series after the FEATURE, never the device:
+  // every soil sensor of the garden would come back labelled "Soil humidity".
+  // So the card draws ONE sensor and says which one in its title.
+  const content = buildWidgetContent('watering', createContext({ devices: threeSensors() }));
+
+  assert.deepEqual(validateWidgetContent(content), []);
+  const curve = content.components.find((component) => component.type === 'chart');
+  assert.equal(curve.device_features.length, 1, 'never several identical labels');
+  assert.ok(curve.device_features[0].includes('sensor-a'), 'the first sensor of the garden');
+  assert.equal(curve.title.fr, 'Humidité du sol · Sensor a');
+  assert.equal(curve.title.en, 'Soil humidity · Sensor a');
+  assert.equal(countByType(content, 'value'), 3, 'the tiles keep the comparison');
+});
+
+test('the curve follows the sensor pinned in the card settings', () => {
+  const content = buildWidgetContent(
+    'watering',
+    createContext({
+      devices: threeSensors(),
+      settings: { sensor: idsOf(gladys, threeSensors()[2]).device },
+    }),
+  );
+
+  const curve = content.components.find((component) => component.type === 'chart');
+  assert.ok(curve.device_features[0].includes('sensor-c'));
+  assert.equal(curve.title.fr, 'Humidité du sol · Sensor c');
 });
 
 test('no chart without a created feature to draw from', () => {

@@ -92,9 +92,9 @@ garden, one refresh costs one API call.
 Two cards can be added to any Gladys dashboard, from the box picker.
 
 **GARDENA watering** shows one line per watering outlet and for the power
-socket — what is open right now, in plain words — soil humidity tiles and a
-**curve of the soil humidity over the past week**, which is what tells you the
-soil is drying rather than what it reads at this second, plus a
+socket — what is open right now, in plain words — one soil humidity tile per
+sensor and a **curve of the soil humidity over the past week**, which is what
+tells you the soil is drying rather than what it reads at this second, plus a
 **Stop watering** button that closes every valve of the account at once, a
 **Water for…** form to open one outlet for a chosen duration, and a button to
 switch the socket on or off.
@@ -107,11 +107,11 @@ since it cancels the mower calendar until you start it again).
 A pressure pump is reported by GARDENA as a valve, so it would otherwise read
 as "closed"; it is shown as running or stopped, the way one speaks of a pump.
 
-Each card has one optional setting: which sensor fills the tiles, and which
-mower the buttons control. Leave them empty when your garden has only one —
-they exist for gardens with several, where acting on "the first one" would be a
-guess. Put two watering cards on a dashboard, each pinned to a sensor, and you
-get one tile set per zone.
+Each card has one optional setting: which sensor the watering card focuses on,
+and which mower the buttons control. Leave them empty when your garden has only
+one — they exist for gardens with several, where acting on "the first one"
+would be a guess. Put two watering cards on a dashboard, each pinned to a
+sensor, and you get one tile set and one curve per zone.
 
 **Showing a widget never calls the GARDENA API.** The cards render the picture
 the real-time stream already keeps in memory, so a dashboard left open all day
@@ -123,9 +123,13 @@ curve is drawn from the history Gladys already keeps, so it costs nothing and
 shows more than the integration holds in memory. The rest of the card is
 re-pulled when something actually changes, and at most once every ten seconds.
 
-With several sensors, the card shows two tiles and puts every sensor in the
-curve. Pin a sensor in the card settings to get its humidity _and_ its
-temperature as tiles, or drop one card per zone.
+With several sensors, every sensor gets its own tile as long as the card has
+room — the tiles take the slots the buttons, the rows and the curve leave. The
+curve, on the other hand, draws **one** sensor: Gladys names a chart series
+after the feature it reads, so several soil sensors on one chart would come
+back as curves all labelled "Soil humidity". The card draws the first sensor
+and names it in the chart title; pin another one in the card settings, or drop
+one card per zone.
 
 ## Staying inside the GARDENA request quota
 

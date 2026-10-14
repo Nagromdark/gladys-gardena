@@ -97,8 +97,8 @@ Deux cartes peuvent être ajoutées à n'importe quel tableau de bord Gladys,
 depuis le sélecteur de blocs.
 
 **Arrosage GARDENA** affiche une ligne par sortie d'eau et pour la prise — ce
-qui est ouvert en ce moment, en clair — des tuiles d'humidité du sol et une
-**courbe de l'humidité du sol sur la semaine écoulée**, qui dit si le sol se
+qui est ouvert en ce moment, en clair — une tuile d'humidité du sol par capteur
+et une **courbe de l'humidité du sol sur la semaine écoulée**, qui dit si le sol se
 dessèche là où un chiffre ne dit que l'instant, puis un
 bouton **Arrêter l'arrosage** qui ferme toutes les vannes du compte d'un coup,
 un formulaire **Arroser…** pour ouvrir une sortie pendant une durée choisie, et
@@ -113,11 +113,12 @@ Une pompe de surpression est rapportée par GARDENA comme une vanne, et se
 lirait donc « fermée » ; elle est affichée en marche ou à l'arrêt, comme on
 parle d'une pompe.
 
-Chaque carte a un réglage optionnel : quel capteur alimente les tuiles, et
-quelle tondeuse les boutons pilotent. Laissez-les vides si votre jardin n'en a
-qu'un — ils existent pour les jardins qui en ont plusieurs, où agir sur « le
-premier » serait une devinette. Posez deux cartes d'arrosage, chacune liée à un
-capteur, et vous obtenez un jeu de tuiles par zone.
+Chaque carte a un réglage optionnel : quel capteur la carte d'arrosage met en
+avant, et quelle tondeuse les boutons pilotent. Laissez-les vides si votre
+jardin n'en a qu'un — ils existent pour les jardins qui en ont plusieurs, où
+agir sur « le premier » serait une devinette. Posez deux cartes d'arrosage,
+chacune liée à un capteur, et vous obtenez un jeu de tuiles et une courbe par
+zone.
 
 **Afficher un widget n'appelle jamais l'API GARDENA.** Les cartes se contentent
 de l'image que le flux temps réel garde déjà en mémoire : un tableau de bord
@@ -131,9 +132,13 @@ elle ne coûte rien et montre plus que ce que l'intégration garde en mémoire. 
 reste de la carte est rechargé quand quelque chose change vraiment, au plus une
 fois toutes les dix secondes.
 
-Avec plusieurs capteurs, la carte affiche deux tuiles et met tous les capteurs
-dans la courbe. Fixez un capteur dans les réglages de la carte pour obtenir son
-humidité _et_ sa température en tuiles, ou posez une carte par zone.
+Avec plusieurs capteurs, chacun a sa tuile tant que la carte a de la place —
+les tuiles occupent les créneaux que les boutons, les lignes et la courbe
+laissent libres. La courbe, elle, ne trace **qu'un** capteur : Gladys nomme les
+séries d'un graphique d'après la fonctionnalité lue, si bien que plusieurs
+capteurs de sol reviendraient en courbes toutes étiquetées « Soil humidity ».
+La carte trace donc le premier capteur et le nomme dans le titre du graphique ;
+fixez-en un autre dans les réglages de la carte, ou posez une carte par zone.
 
 ## Rester dans le quota de requêtes GARDENA
 

@@ -58,6 +58,9 @@ const TILE_PRIORITY = [
 // blanket cap would drop a sensor on a small garden that had plenty of space.
 const MAX_TILES = 3;
 const MAX_STATUS_ROWS = 10;
+// Room left for the sensor name in the chart title, whose bound is 40: the
+// longest prefix is the French one, "Humidité du sol · ".
+const SENSOR_NAME_IN_TITLE = 20;
 
 /** Devices carrying at least one valve or power socket. */
 function wateringDevices(devices) {
@@ -169,17 +172,23 @@ function buildTiles({ sensors, ids, created, maxTiles }) {
 }
 
 /**
- * The soil-humidity features the chart can draw, at most four.
+ * The soil-humidity curve: the feature to draw, and the sensor it reads.
  *
- * Only created features: a chart bound to a feature Gladys does not know would
- * draw an empty frame.
+ * ONE sensor, deliberately. Gladys names the series of a widget chart after
+ * the FEATURE and never falls back to the device (`WidgetComponents.jsx`), so
+ * three sensors on one chart come back as three curves all labelled "Soil
+ * humidity" — three colors and nothing to tell them apart. The card draws one
+ * sensor and names it in the title; the tiles above keep the live comparison
+ * between sensors, which is what a glance needs anyway.
+ *
+ * Only a created feature: a chart bound to a feature Gladys does not know
+ * would draw an empty frame.
  */
-function soilHumidityFeatures({ sensors, ids, created }) {
+function soilHumidityCurve({ sensors, ids, created }) {
   const descriptor = MEASUREMENTS.find((entry) => entry.attribute === 'soilHumidity');
   if (!descriptor || !created) {
-    return [];
+    return undefined;
   }
-  const features = [];
   for (const device of sensors) {
     const [service] = servicesOfType(device, SERVICE_TYPES.SENSOR);
     if (service?.attributes?.soilHumidity === undefined) {
@@ -187,10 +196,10 @@ function soilHumidityFeatures({ sensors, ids, created }) {
     }
     const externalId = featureId(ids(device), service, descriptor.key);
     if (created.has(externalId)) {
-      features.push(externalId);
+      return { externalId, sensorName: device.name };
     }
   }
-  return features.slice(0, 4);
+  return undefined;
 }
 
 /** The outlets the "water for N minutes" form can choose from. */
@@ -262,15 +271,21 @@ export const wateringWidget = {
       head.push(status(rows));
     }
 
-    // The focal slot: how the soil dried over the week. Bound to the published
-    // features, so the core draws from the history it already keeps — nothing
+    // The focal slot: how the soil dried over the week. Bound to a published
+    // feature, so the core draws from the history it already keeps — nothing
     // to compute, nothing to store, and more than the picture holds in memory.
-    const humidityFeatures = soilHumidityFeatures({ sensors, ids, created });
-    if (humidityFeatures.length > 0) {
+    const curve = soilHumidityCurve({ sensors, ids, created });
+    if (curve) {
+      // The title carries the sensor name because the legend cannot: it is
+      // the feature name, identical for every sensor of the garden.
+      const sensorName = clip(curve.sensorName, SENSOR_NAME_IN_TITLE);
       tail.push(
         chart({
-          title: { en: 'Soil humidity', fr: 'Humidité du sol' },
-          deviceFeatures: humidityFeatures,
+          title: {
+            en: `Soil humidity · ${sensorName}`,
+            fr: `Humidité du sol · ${sensorName}`,
+          },
+          deviceFeatures: [curve.externalId],
           interval: 'last-week',
           chartType: 'area',
           unit: 'percent',

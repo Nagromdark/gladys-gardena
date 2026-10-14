@@ -29,8 +29,8 @@
           "source": "devices",
           "label": { "en": "Sensor", "fr": "Capteur" },
           "description": {
-            "en": "Which sensor fills the tiles. Leave empty to show every sensor of the garden.",
-            "fr": "Le capteur affiché dans les tuiles. Laissez vide pour afficher tous les capteurs."
+            "en": "The sensor the card focuses on. Empty: every sensor in the tiles, the first in the curve.",
+            "fr": "Le capteur mis en avant. Vide : tous les capteurs en tuiles, le premier dans la courbe."
           },
           "required": false
         }
