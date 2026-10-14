@@ -18,6 +18,7 @@ import { isWatering } from '../devices/valve.js';
 import { isPowered } from '../devices/powerSocket.js';
 import {
   actionButton,
+  chart,
   clip,
   emptyState,
   featureButton,
@@ -27,7 +28,12 @@ import {
   tile,
   withinBudget,
 } from './components.js';
-import { powerSocketActivityLabel, valveActivityLabel } from './labels.js';
+import {
+  isPump,
+  powerSocketActivityLabel,
+  pumpActivityLabel,
+  valveActivityLabel,
+} from './labels.js';
 
 export const WATERING_WIDGET = 'watering';
 
@@ -46,6 +52,9 @@ const TILE_PRIORITY = [
   { attribute: 'lightIntensity', fr: 'Luminosité', icon: 'sun' },
 ];
 const MAX_TILES = 3;
+// With the curve on the card, a third tile of the same metric is redundant —
+// and the room is better spent on the offline warning.
+const MAX_TILES_WITH_CHART = 2;
 const MAX_STATUS_ROWS = 10;
 
 /** Devices carrying at least one valve or power socket. */
@@ -77,6 +86,8 @@ function buildStatusRows({ devices }) {
   const rows = [];
   for (const device of devices) {
     const offline = !isOnline(device);
+    // A pressure pump is a VALVE service too: same values, different words.
+    const label = isPump(device) ? pumpActivityLabel : valveActivityLabel;
     for (const service of servicesOfType(device, SERVICE_TYPES.VALVE)) {
       const { name, activity } = service.attributes;
       rows.push({
@@ -84,8 +95,8 @@ function buildStatusRows({ devices }) {
         offline,
         row: statusRow({
           label: { en: clip(name ?? device.name, 40), fr: clip(name ?? device.name, 40) },
-          value: valveActivityLabel(activity) ?? { en: 'Unknown', fr: 'Inconnu' },
-          icon: 'droplet',
+          value: label(activity) ?? { en: 'Unknown', fr: 'Inconnu' },
+          icon: isPump(device) ? 'zap' : 'droplet',
           color: isWatering(activity) ? 'success' : offline ? 'warning' : 'neutral',
         }),
       });
@@ -121,12 +132,12 @@ function buildStatusRows({ devices }) {
 }
 
 /** Sensor tiles, bound to the published features whenever Gladys knows them. */
-function buildTiles({ sensors, ids, created }) {
+function buildTiles({ sensors, ids, created, maxTiles }) {
   const tiles = [];
   for (const measurement of TILE_PRIORITY) {
     const descriptor = MEASUREMENTS.find((entry) => entry.attribute === measurement.attribute);
     for (const device of sensors) {
-      if (tiles.length >= MAX_TILES) {
+      if (tiles.length >= maxTiles) {
         return tiles;
       }
       const [service] = servicesOfType(device, SERVICE_TYPES.SENSOR);
@@ -153,6 +164,31 @@ function buildTiles({ sensors, ids, created }) {
     }
   }
   return tiles;
+}
+
+/**
+ * The soil-humidity features the chart can draw, at most four.
+ *
+ * Only created features: a chart bound to a feature Gladys does not know would
+ * draw an empty frame.
+ */
+function soilHumidityFeatures({ sensors, ids, created }) {
+  const descriptor = MEASUREMENTS.find((entry) => entry.attribute === 'soilHumidity');
+  if (!descriptor || !created) {
+    return [];
+  }
+  const features = [];
+  for (const device of sensors) {
+    const [service] = servicesOfType(device, SERVICE_TYPES.SENSOR);
+    if (service?.attributes?.soilHumidity === undefined) {
+      continue;
+    }
+    const externalId = featureId(ids(device), service, descriptor.key);
+    if (created.has(externalId)) {
+      features.push(externalId);
+    }
+  }
+  return features.slice(0, 4);
 }
 
 /** The outlets the "water for N minutes" form can choose from. */
@@ -220,7 +256,30 @@ export const wateringWidget = {
       components.push(status(rows));
     }
 
-    components.push(...buildTiles({ sensors, ids, created }));
+    // The focal slot: how the soil dried over the week. Bound to the published
+    // features, so the core draws from the history it already keeps — nothing
+    // to compute, nothing to store, and more than the picture holds in memory.
+    const humidityFeatures = soilHumidityFeatures({ sensors, ids, created });
+    components.push(
+      ...buildTiles({
+        sensors,
+        ids,
+        created,
+        maxTiles: humidityFeatures.length > 0 ? MAX_TILES_WITH_CHART : MAX_TILES,
+      }),
+    );
+
+    if (humidityFeatures.length > 0) {
+      components.push(
+        chart({
+          title: { en: 'Soil humidity', fr: 'Humidité du sol' },
+          deviceFeatures: humidityFeatures,
+          interval: 'last-week',
+          chartType: 'area',
+          unit: 'percent',
+        }),
+      );
+    }
 
     const options = wateringOptions(watering);
     if (options.length > 0) {

@@ -29,6 +29,15 @@ const VALVE_ACTIVITIES = {
   SCHEDULED_WATERING: { en: 'Scheduled watering', fr: 'Arrosage programmé' },
 };
 
+// GARDENA exposes a pressure pump as a VALVE service, so it inherits the valve
+// vocabulary: a pump reported "CLOSED" would read as "Fermée", which is right
+// for a tap and wrong for a pump.
+const PUMP_ACTIVITIES = {
+  CLOSED: { en: 'Stopped', fr: 'À l’arrêt' },
+  MANUAL_WATERING: { en: 'Running (manual)', fr: 'En marche (manuel)' },
+  SCHEDULED_WATERING: { en: 'Running (scheduled)', fr: 'En marche (programmé)' },
+};
+
 const POWER_SOCKET_ACTIVITIES = {
   OFF: { en: 'Off', fr: 'Éteinte' },
   FOREVER_ON: { en: 'On', fr: 'Allumée' },
@@ -81,6 +90,28 @@ export function mowerActivityLabel(activity) {
  */
 export function valveActivityLabel(activity) {
   return translate(VALVE_ACTIVITIES, activity);
+}
+
+/**
+ * Readable label of a pump activity — the same GARDENA values as a valve, said
+ * the way one speaks of a pump.
+ * @param {string|undefined} activity - GARDENA `activity`.
+ * @returns {{en: string, fr: string}|undefined} The label.
+ */
+export function pumpActivityLabel(activity) {
+  return translate(PUMP_ACTIVITIES, activity);
+}
+
+/**
+ * Is this device a pump rather than a tap valve?
+ *
+ * Nothing in the service type says so: both are VALVE. The model name is what
+ * distinguishes a "GARDENA smart Pressure Pump" from a Water Control.
+ * @param {object} device - Normalized GARDENA device.
+ * @returns {boolean} True for a pump.
+ */
+export function isPump(device) {
+  return /pump|pompe/i.test(String(device?.common?.modelType ?? ''));
 }
 
 /**

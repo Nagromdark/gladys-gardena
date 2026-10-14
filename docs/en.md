@@ -92,7 +92,9 @@ garden, one refresh costs one API call.
 Two cards can be added to any Gladys dashboard, from the box picker.
 
 **GARDENA watering** shows one line per watering outlet and for the power
-socket — what is open right now, in plain words — plus soil humidity tiles, a
+socket — what is open right now, in plain words — soil humidity tiles and a
+**curve of the soil humidity over the past week**, which is what tells you the
+soil is drying rather than what it reads at this second, plus a
 **Stop watering** button that closes every valve of the account at once, a
 **Water for…** form to open one outlet for a chosen duration, and a button to
 switch the socket on or off.
@@ -101,6 +103,9 @@ switch the socket on or off.
 mower, its battery and its operating hours, with **Mow now** / **Park**,
 a **Mow for…** form, and **Park, no schedule** (which asks for a confirmation,
 since it cancels the mower calendar until you start it again).
+
+A pressure pump is reported by GARDENA as a valve, so it would otherwise read
+as "closed"; it is shown as running or stopped, the way one speaks of a pump.
 
 Each card has one optional setting: which sensor fills the tiles, and which
 mower the buttons control. Leave them empty when your garden has only one —
@@ -113,8 +118,14 @@ the real-time stream already keeps in memory, so a dashboard left open all day
 costs nothing against your weekly quota. Only tapping an action button sends a
 request — one per command, exactly like a toggle on a device page.
 
-The tiles bound to a sensor update by themselves, live. The rest of the card is
+The tiles and the curve bound to a sensor update by themselves, live — the
+curve is drawn from the history Gladys already keeps, so it costs nothing and
+shows more than the integration holds in memory. The rest of the card is
 re-pulled when something actually changes, and at most once every ten seconds.
+
+With several sensors, the card shows two tiles and puts every sensor in the
+curve. Pin a sensor in the card settings to get its humidity _and_ its
+temperature as tiles, or drop one card per zone.
 
 ## Staying inside the GARDENA request quota
 

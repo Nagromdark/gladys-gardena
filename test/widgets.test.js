@@ -18,7 +18,13 @@ import {
   runWidgetAction,
   widgetKeysForService,
 } from '../src/widgets/index.js';
-import { humanize, mowerActivityLabel, valveActivityLabel } from '../src/widgets/labels.js';
+import {
+  humanize,
+  isPump,
+  mowerActivityLabel,
+  pumpActivityLabel,
+  valveActivityLabel,
+} from '../src/widgets/labels.js';
 import { buildDevice, idsOf } from '../src/devices/index.js';
 import { parseLocation } from '../src/gardena/model.js';
 import { normalizeConfig } from '../src/config.js';
@@ -27,6 +33,7 @@ import {
   IRRIGATION_CONTROL_ID,
   MOWER_ID,
   SENSOR_ID,
+  WATER_CONTROL_ID,
   buildLocationPayload,
 } from './helpers/gardenaFixtures.js';
 
@@ -304,4 +311,71 @@ test('an unknown GARDENA value is humanized, never shown raw or blank', () => {
     fr: 'Some new state',
   });
   assert.equal(mowerActivityLabel(undefined), undefined);
+});
+
+test('the card draws the soil humidity of the week, bound to the history', () => {
+  const content = buildWidgetContent('watering', createContext());
+
+  const curve = content.components.find((component) => component.type === 'chart');
+  assert.ok(curve, 'the focal slot carries the drying curve');
+  assert.equal(curve.interval, 'last-week');
+  assert.equal(curve.unit, '%');
+  assert.ok(curve.device_features.length >= 1 && curve.device_features.length <= 4);
+  for (const feature of curve.device_features) {
+    assert.match(feature, /soil-humidity$/);
+  }
+  // With the curve on the card, the tiles make room for the offline warning.
+  assert.ok(countByType(content, 'value') <= 2);
+});
+
+test('no chart without a created feature to draw from', () => {
+  // An unbound chart would render an empty frame: better no chart at all.
+  const content = buildWidgetContent('watering', createContext({ created: new Set() }));
+  assert.deepEqual(validateWidgetContent(content), []);
+  assert.equal(countByType(content, 'chart'), 0);
+  assert.ok(countByType(content, 'value') > 0, 'the tiles fall back to computed values');
+});
+
+test('a pressure pump is not spoken of as a tap', () => {
+  // GARDENA exposes a pump as a VALVE service, so it inherits "CLOSED" —
+  // right for a tap, wrong for a pump.
+  const parsed = [...parseLocation(buildLocationPayload()).values()];
+  const waterControl = parsed.find((device) => device.id === WATER_CONTROL_ID);
+  const pump = {
+    ...waterControl,
+    name: 'Pompe',
+    common: { ...waterControl.common, modelType: 'GARDENA smart Pressure Pump' },
+    // The row is labelled with the name the GARDENA app gives the outlet.
+    services: {
+      ...waterControl.services,
+      VALVE: waterControl.services.VALVE.map((service) => ({
+        ...service,
+        attributes: { ...service.attributes, name: 'Pompe' },
+      })),
+    },
+  };
+
+  const asPump = buildWidgetContent('watering', createContext({ devices: [pump] }));
+  const pumpRow = asPump.components
+    .find((component) => component.type === 'status')
+    .items.find((item) => item.label.fr === 'Pompe');
+  assert.equal(pumpRow.value.fr, 'À l’arrêt');
+  assert.equal(pumpRow.value.en, 'Stopped');
+  assert.equal(pumpRow.icon, 'zap');
+
+  // A real tap keeps the watering vocabulary.
+  const asValve = buildWidgetContent('watering', createContext({ devices: [waterControl] }));
+  const valveRow = asValve.components.find((component) => component.type === 'status').items[0];
+  assert.equal(valveRow.value.fr, 'Fermée');
+  assert.equal(valveRow.icon, 'droplet');
+});
+
+test('pump and valve labels cover the same GARDENA values', () => {
+  for (const activity of ['CLOSED', 'MANUAL_WATERING', 'SCHEDULED_WATERING']) {
+    assert.ok(pumpActivityLabel(activity).fr, `${activity}: untranslated for a pump`);
+    assert.ok(valveActivityLabel(activity).fr, `${activity}: untranslated for a valve`);
+  }
+  assert.equal(isPump({ common: { modelType: 'GARDENA smart Pressure Pump' } }), true);
+  assert.equal(isPump({ common: { modelType: 'GARDENA smart Water Control' } }), false);
+  assert.equal(isPump({}), false, 'a device without a model is not assumed to be a pump');
 });

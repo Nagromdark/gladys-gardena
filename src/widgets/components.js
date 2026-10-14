@@ -151,6 +151,35 @@ export function gauge({ label, deviceFeature, value, min, max, unit, color }) {
 }
 
 /**
+ * A `chart` component following published features over time.
+ *
+ * Bound to device features rather than to inline points: the core reads the
+ * history it already stores, so the card costs nothing to draw and shows more
+ * than the integration keeps in memory.
+ * @param {object} options - Chart options.
+ * @param {object} options.title - Multi-language title.
+ * @param {Array<string>} options.deviceFeatures - 1 to 4 feature external ids.
+ * @param {string} [options.interval] - A chart interval, e.g. 'last-week'.
+ * @param {string} [options.chartType] - 'line' | 'area' | 'bar' | 'stepline'.
+ * @param {string} [options.unit] - Gladys unit of the series.
+ * @returns {object} The component.
+ */
+export function chart({ title, deviceFeatures, interval = 'last-week', chartType = 'area', unit }) {
+  const component = {
+    type: 'chart',
+    title: { en: clip(title.en, MAX.heading), fr: clip(title.fr, MAX.heading) },
+    device_features: deviceFeatures.slice(0, 4),
+    interval,
+    chart_type: chartType,
+  };
+  const symbol = unitSymbol(unit);
+  if (symbol) {
+    component.unit = symbol;
+  }
+  return component;
+}
+
+/**
  * One row of a `status` component.
  * @param {object} options - Row options.
  * @param {object} options.label - Multi-language label.
