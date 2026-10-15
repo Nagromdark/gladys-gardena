@@ -337,8 +337,10 @@ test('the card draws the soil humidity of the week, bound to the history', () =>
   assert.ok(curve, 'the focal slot carries the drying curve');
   assert.equal(curve.interval, 'last-week');
   assert.equal(curve.unit, '%');
-  assert.equal(curve.device_features.length, 1, 'one sensor, one named curve');
-  assert.match(curve.device_features[0], /soil-humidity$/);
+  assert.ok(curve.device_features.length >= 1 && curve.device_features.length <= 4);
+  for (const feature of curve.device_features) {
+    assert.match(feature, /soil-humidity$/);
+  }
   // On a crowded garden the tiles give up their slots to what earns them: the
   // emergency button, what is running, the curve, the forms, the warning.
   assert.equal(content.components.length, 8, 'the fixture garden fills the card');
@@ -362,22 +364,30 @@ test('a small garden keeps a tile per sensor', () => {
   assert.ok(content.components.length <= 8);
 });
 
-test('the curve names the sensor it draws, since the legend cannot', () => {
-  // Gladys names a widget chart series after the FEATURE, never the device:
-  // every soil sensor of the garden would come back labelled "Soil humidity".
-  // So the card draws ONE sensor and says which one in its title.
-  const content = buildWidgetContent('watering', createContext({ devices: threeSensors() }));
+test('every sensor of the garden is drawn, capped at what the core keeps', () => {
+  // Gladys labels each series after the FEATURE, so the curves of several
+  // sensors all read "Soil humidity" — compared shapes are worth more than
+  // that legend, but a fifth sensor would be dropped silently by the core.
+  const sensors = [...threeSensors(), ...threeSensors()].map((sensor, index) => ({
+    ...sensor,
+    id: `${sensor.id}-${index}`,
+    name: `Sensor ${index}`,
+    services: {
+      SENSOR: sensor.services.SENSOR.map((s) => ({ ...s, id: `${sensor.id}-${index}` })),
+    },
+  }));
+
+  const content = buildWidgetContent('watering', createContext({ devices: sensors }));
 
   assert.deepEqual(validateWidgetContent(content), []);
   const curve = content.components.find((component) => component.type === 'chart');
-  assert.equal(curve.device_features.length, 1, 'never several identical labels');
-  assert.ok(curve.device_features[0].includes('sensor-a'), 'the first sensor of the garden');
-  assert.equal(curve.title.fr, 'Humidité du sol · Sensor a');
-  assert.equal(curve.title.en, 'Soil humidity · Sensor a');
-  assert.equal(countByType(content, 'value'), 3, 'the tiles keep the comparison');
+  assert.equal(curve.device_features.length, 4, 'six sensors, the four the core draws');
+  assert.equal(curve.title.fr, 'Humidité du sol', 'no sensor named: they share the legend');
 });
 
-test('the curve follows the sensor pinned in the card settings', () => {
+test('a single curve carries the name of the sensor it draws', () => {
+  // One series, one legend entry: the title is then free to say WHICH sensor
+  // — the only place the card names it when a sensor is pinned.
   const content = buildWidgetContent(
     'watering',
     createContext({
@@ -387,8 +397,10 @@ test('the curve follows the sensor pinned in the card settings', () => {
   );
 
   const curve = content.components.find((component) => component.type === 'chart');
+  assert.equal(curve.device_features.length, 1);
   assert.ok(curve.device_features[0].includes('sensor-c'));
   assert.equal(curve.title.fr, 'Humidité du sol · Sensor c');
+  assert.equal(curve.title.en, 'Soil humidity · Sensor c');
 });
 
 test('no chart without a created feature to draw from', () => {

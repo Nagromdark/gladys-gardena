@@ -124,12 +124,13 @@ shows more than the integration holds in memory. The rest of the card is
 re-pulled when something actually changes, and at most once every ten seconds.
 
 With several sensors, every sensor gets its own tile as long as the card has
-room — the tiles take the slots the buttons, the rows and the curve leave. The
-curve, on the other hand, draws **one** sensor: Gladys names a chart series
-after the feature it reads, so several soil sensors on one chart would come
-back as curves all labelled "Soil humidity". The card draws the first sensor
-and names it in the chart title; pin another one in the card settings, or drop
-one card per zone.
+room — the tiles take the slots the buttons, the rows and the curve leave —
+and the curve draws them all, up to four. One thing to know about that curve:
+Gladys names a chart series after the **feature** it reads, so every soil
+sensor comes back labelled "Soil humidity" in the legend, and what tells the
+curves apart is their shape, not that legend. Pin a sensor in the card
+settings to get a single curve, named after it in the chart title, or drop one
+card per zone.
 
 ## Staying inside the GARDENA request quota
 

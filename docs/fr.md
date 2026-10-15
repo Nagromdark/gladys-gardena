@@ -134,11 +134,12 @@ fois toutes les dix secondes.
 
 Avec plusieurs capteurs, chacun a sa tuile tant que la carte a de la place —
 les tuiles occupent les créneaux que les boutons, les lignes et la courbe
-laissent libres. La courbe, elle, ne trace **qu'un** capteur : Gladys nomme les
-séries d'un graphique d'après la fonctionnalité lue, si bien que plusieurs
-capteurs de sol reviendraient en courbes toutes étiquetées « Soil humidity ».
-La carte trace donc le premier capteur et le nomme dans le titre du graphique ;
-fixez-en un autre dans les réglages de la carte, ou posez une carte par zone.
+laissent libres — et la courbe les trace tous, jusqu'à quatre. Une chose à
+savoir sur cette courbe : Gladys nomme les séries d'un graphique d'après la
+**fonctionnalité** lue, donc chaque capteur de sol revient étiqueté « Soil
+humidity » dans la légende, et ce qui distingue les courbes est leur forme,
+pas cette légende. Fixez un capteur dans les réglages de la carte pour n'en
+avoir qu'une, nommée d'après lui dans le titre, ou posez une carte par zone.
 
 ## Rester dans le quota de requêtes GARDENA
 

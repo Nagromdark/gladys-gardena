@@ -172,23 +172,24 @@ function buildTiles({ sensors, ids, created, maxTiles }) {
 }
 
 /**
- * The soil-humidity curve: the feature to draw, and the sensor it reads.
+ * The soil-humidity curves: one per sensor, with the sensor each one reads.
  *
- * ONE sensor, deliberately. Gladys names the series of a widget chart after
- * the FEATURE and never falls back to the device (`WidgetComponents.jsx`), so
- * three sensors on one chart come back as three curves all labelled "Soil
- * humidity" — three colors and nothing to tell them apart. The card draws one
- * sensor and names it in the title; the tiles above keep the live comparison
- * between sensors, which is what a glance needs anyway.
+ * Gladys names the series of a device-bound chart after the FEATURE, and
+ * never falls back to the device (`WidgetComponents.jsx`) the way the regular
+ * chart box does: several soil sensors come back as several curves all
+ * labelled "Soil humidity". Drawing them anyway is a deliberate trade — the
+ * shapes compared side by side say more than one named curve, and the title
+ * names the sensor whenever there is only one to name.
  *
- * Only a created feature: a chart bound to a feature Gladys does not know
+ * Only created features: a chart bound to a feature Gladys does not know
  * would draw an empty frame.
  */
-function soilHumidityCurve({ sensors, ids, created }) {
+function soilHumidityCurves({ sensors, ids, created }) {
   const descriptor = MEASUREMENTS.find((entry) => entry.attribute === 'soilHumidity');
   if (!descriptor || !created) {
-    return undefined;
+    return [];
   }
+  const curves = [];
   for (const device of sensors) {
     const [service] = servicesOfType(device, SERVICE_TYPES.SENSOR);
     if (service?.attributes?.soilHumidity === undefined) {
@@ -196,10 +197,11 @@ function soilHumidityCurve({ sensors, ids, created }) {
     }
     const externalId = featureId(ids(device), service, descriptor.key);
     if (created.has(externalId)) {
-      return { externalId, sensorName: device.name };
+      curves.push({ externalId, sensorName: device.name });
     }
   }
-  return undefined;
+  // `chart()` caps the series at the four the core keeps.
+  return curves;
 }
 
 /** The outlets the "water for N minutes" form can choose from. */
@@ -271,21 +273,21 @@ export const wateringWidget = {
       head.push(status(rows));
     }
 
-    // The focal slot: how the soil dried over the week. Bound to a published
-    // feature, so the core draws from the history it already keeps — nothing
+    // The focal slot: how the soil dried over the week. Bound to published
+    // features, so the core draws from the history it already keeps — nothing
     // to compute, nothing to store, and more than the picture holds in memory.
-    const curve = soilHumidityCurve({ sensors, ids, created });
-    if (curve) {
-      // The title carries the sensor name because the legend cannot: it is
-      // the feature name, identical for every sensor of the garden.
-      const sensorName = clip(curve.sensorName, SENSOR_NAME_IN_TITLE);
+    const curves = soilHumidityCurves({ sensors, ids, created });
+    if (curves.length > 0) {
+      // A single curve gets its sensor named in the title, since the legend
+      // only ever says "Soil humidity"; several curves share that legend, so
+      // naming one of them in the title would point at the wrong one.
+      const only = curves.length === 1 ? clip(curves[0].sensorName, SENSOR_NAME_IN_TITLE) : null;
       tail.push(
         chart({
-          title: {
-            en: `Soil humidity · ${sensorName}`,
-            fr: `Humidité du sol · ${sensorName}`,
-          },
-          deviceFeatures: [curve.externalId],
+          title: only
+            ? { en: `Soil humidity · ${only}`, fr: `Humidité du sol · ${only}` }
+            : { en: 'Soil humidity', fr: 'Humidité du sol' },
+          deviceFeatures: curves.map((curve) => curve.externalId),
           interval: 'last-week',
           chartType: 'area',
           unit: 'percent',
