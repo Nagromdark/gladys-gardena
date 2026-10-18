@@ -127,6 +127,11 @@ npx github:GladysAssistant/integration-store .
    `linux/amd64` + `linux/arm64` image to `ghcr.io`.
 3. The decentralized indexer picks up the new manifest version and Gladys offers
    a one-click install or update.
+4. Write the user-facing entry in [`CHANGELOG.md`](./CHANGELOG.md) /
+   [`CHANGELOG.fr.md`](./CHANGELOG.fr.md) and paste that version's section into
+   the GitHub release of the tag: Gladys turns the installed version number
+   into a link to this repository's releases, so that body IS the changelog
+   users read. The workflow pushes the tag, it does not create the release.
 
 `cover.png` (800×534 px, 82 KB) carries the GARDENA logo, used to identify the
 product this integration talks to. It is the manufacturer's registered
