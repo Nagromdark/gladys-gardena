@@ -99,3 +99,51 @@ jobs:
       packages: write
     with:
       version: ${{ needs.prepare.outputs.version }}
+
+  # The changelog users read. Gladys turns the installed version number into a
+  # link to this repository's releases, filtered on that version: a tag without
+  # a release leaves them on "no releases found". The body is the matching
+  # section of CHANGELOG.md.
+  #
+  # After `build` on purpose: a changelog entry nobody wrote must never keep
+  # the image from being published. The release is created either way (with a
+  # placeholder body), and the job then fails so the omission is seen.
+  publish-release:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release
+    steps:
+      - name: Checkout the released tag
+        uses: actions/checkout@v7
+        with:
+          ref: v${{ needs.prepare.outputs.version }}
+
+      - name: Create the GitHub release from the changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          # Re-running a release must never silently overwrite notes edited by
+          # hand in the GitHub UI.
+          if gh release view "v${VERSION}" >/dev/null 2>&1; then
+            echo "::notice::Release v${VERSION} already exists, left untouched."
+            exit 0
+          fi
+
+          notes_status=0
+          node .github/scripts/release-notes.mjs "$VERSION" release-notes.md || notes_status=$?
+          if [ "$notes_status" -ne 0 ] && [ "$notes_status" -ne 3 ]; then
+            exit "$notes_status"
+          fi
+
+          # The title is the bare version, as the releases published by hand.
+          gh release create "v${VERSION}" --title "${VERSION}" --notes-file release-notes.md
+
+          if [ "$notes_status" -eq 3 ]; then
+            echo "::error::CHANGELOG.md has no \"## ${VERSION}\" section: the release was created with a placeholder body. Write the section and edit the release notes."
+            exit 1
+          fi

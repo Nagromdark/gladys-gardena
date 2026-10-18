@@ -2,7 +2,9 @@
 
 Ce qui change pour vous, version par version. Gladys relie le numéro de
 version d'une intégration installée aux releases de ce dépôt : chaque entrée
-ci-dessous est aussi le corps de la release GitHub correspondante.
+ci-dessous est aussi le corps de la release GitHub correspondante — le
+workflow de release la publie à partir de la section de la version qu'il
+publie, qu'il faut donc écrire avant de le lancer.
 
 _English version: [CHANGELOG.md](./CHANGELOG.md)._
 

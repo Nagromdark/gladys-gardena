@@ -2,7 +2,9 @@
 
 What changed for you, release by release. Gladys links the version number of
 an installed integration to this repository's releases, so each entry here is
-also the body of the matching GitHub release.
+also the body of the matching GitHub release — the release workflow publishes
+it from the section of the version it is releasing, which therefore has to be
+written before the release is run.
 
 _Version française : [CHANGELOG.fr.md](./CHANGELOG.fr.md)._
 

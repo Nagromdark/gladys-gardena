@@ -121,17 +121,21 @@ npx github:GladysAssistant/integration-store .
 ## Publishing
 
 1. Add the GitHub topic `gladys-assistant-integration` to the repository.
-2. **Actions → Release → Run workflow**, pick `patch`, `minor` or `major`: the
+2. Write the entry of the version you are about to publish in
+   [`CHANGELOG.md`](./CHANGELOG.md), under a `## X.Y.Z` heading (and mirror it
+   in [`CHANGELOG.fr.md`](./CHANGELOG.fr.md)). Gladys turns the installed
+   version number into a link to this repository's releases filtered on that
+   version, so that section is the changelog users read — write it for them,
+   not for the diff.
+3. **Actions → Release → Run workflow**, pick `patch`, `minor` or `major`: the
    workflow bumps the version everywhere (`package.json` + manifest `version`
-   and `docker_image`), pushes the `vX.Y.Z` tag and builds the
-   `linux/amd64` + `linux/arm64` image to `ghcr.io`.
-3. The decentralized indexer picks up the new manifest version and Gladys offers
+   and `docker_image`), pushes the `vX.Y.Z` tag, builds the
+   `linux/amd64` + `linux/arm64` image to `ghcr.io`, then publishes the GitHub
+   release with that changelog section as its body. A version with no section
+   still gets a release (with a placeholder body) and the job fails, so the
+   omission cannot go unnoticed.
+4. The decentralized indexer picks up the new manifest version and Gladys offers
    a one-click install or update.
-4. Write the user-facing entry in [`CHANGELOG.md`](./CHANGELOG.md) /
-   [`CHANGELOG.fr.md`](./CHANGELOG.fr.md) and paste that version's section into
-   the GitHub release of the tag: Gladys turns the installed version number
-   into a link to this repository's releases, so that body IS the changelog
-   users read. The workflow pushes the tag, it does not create the release.
 
 `cover.png` (800×534 px, 82 KB) carries the GARDENA logo, used to identify the
 product this integration talks to. It is the manufacturer's registered
